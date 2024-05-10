@@ -1,5 +1,5 @@
 {
-  "extends": "../../tsconfig.json",
+  "extends": "../tsconfig.json",
   "compilerOptions": {
     "target": "esnext",
     "module": "commonjs",
@@ -9,10 +9,5 @@
     "moduleResolution": "node",
     "sourceMap": true
   },
-  "exclude": ["node_modules"],
-  "references": [{
-    "path": "../../packages/react"
-  }, {
-    "path": "../../packages/ws-server"
-  }]
+  "exclude": ["node_modules"]
 }

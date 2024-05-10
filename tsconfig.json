@@ -1,0 +1,18 @@
+{
+  "extends": "@tsconfig/node18",
+  "compilerOptions": {
+    "paths": {},
+    "composite": true,
+    "strictNullChecks": true,
+    "noUncheckedIndexedAccess": true,
+    "jsx": "react",
+    "strict": true
+  },
+  "exclude": [
+    "**/node_modules",
+    "**/__tests__",
+    "**/*.test.tsx",
+    "**/*.test.ts",
+    "**/lib"
+  ]
+}
