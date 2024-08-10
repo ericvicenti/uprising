@@ -83,3 +83,5 @@ android/keystores/debug.keystore
 # Next
 .next
 .vercel
+
+data

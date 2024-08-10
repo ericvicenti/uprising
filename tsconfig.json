@@ -5,8 +5,9 @@
     "composite": true,
     "strictNullChecks": true,
     "noUncheckedIndexedAccess": true,
-    "jsx": "react",
-    "strict": true
+    "strict": true,
+    "jsx": "react-jsx",
+    "jsxImportSource": "@rise-tools/react"
   },
   "exclude": [
     "**/node_modules",
