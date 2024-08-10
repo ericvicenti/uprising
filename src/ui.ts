@@ -1,36 +1,31 @@
-import { ComponentDataState, ServerDataState } from '@final-ui/react'
-import React from 'react'
+import { ComponentDataState, ServerDataState } from '@final-ui/react';
+import React from 'react';
 
-import { hslToHex } from './color'
+import { hslToHex } from './color';
+import { DefaultBounceAmount, DefaultBounceDuration, DefaultSmoothing, DefaultTransitionDuration } from './constants';
+import { getSequenceActiveItem } from './eg-main';
+import { DashMidi, getDashboardMidiFields } from './eg-midi-fields';
+import { EGVideo } from './eg-video-playback';
 import {
-  DefaultBounceAmount,
-  DefaultBounceDuration,
-  DefaultSmoothing,
-  DefaultTransitionDuration,
-} from './constants'
-import { getSequenceActiveItem } from './eg-main'
-import { DashMidi, getDashboardMidiFields } from './eg-midi-fields'
-import { EGVideo } from './eg-video-playback'
-import {
-  ColorMedia,
+  ColorScene,
   Effect,
   Effects,
   Layer,
-  LayersMedia,
+  LayersScene,
   MainState,
   Media,
   SequenceItem,
-  SequenceMedia,
+  SequenceScene,
   Transition,
   TransitionState,
-  VideoMedia,
-} from './state-schema'
+  VideoScene,
+} from './state-schema';
 
 export type UIContext = {
-  video: EGVideo
-  mainState: MainState
-  libraryKeys: string[]
-}
+  video: EGVideo;
+  mainState: MainState;
+  libraryKeys: string[];
+};
 
 function icon(name: string): ComponentDataState {
   return {
@@ -38,7 +33,7 @@ function icon(name: string): ComponentDataState {
     key: 'icon',
     component: 'RiseIcon',
     props: { icon: name },
-  }
+  };
 }
 
 function section(title: string, children: ServerDataState[], key?: string): ServerDataState {
@@ -65,7 +60,7 @@ function section(title: string, children: ServerDataState[], key?: string): Serv
       ...children,
       { $: 'component', component: 'Separator', props: {} },
     ],
-  }
+  };
 }
 
 function sortableList({
@@ -73,9 +68,9 @@ function sortableList({
   label,
   props,
 }: {
-  key?: string
-  label?: string
-  props?: ComponentDataState['props']
+  key?: string;
+  label?: string;
+  props?: ComponentDataState['props'];
 }): ServerDataState {
   return {
     $: 'component',
@@ -99,11 +94,11 @@ function sortableList({
         },
       },
     ],
-  }
+  };
 }
 
-function getVideoControls(mediaPath: string, state: VideoMedia, ctx: UIContext): ServerDataState[] {
-  const player = ctx.video.getPlayer(state.id)
+function getVideoControls(controlPath: string, state: VideoScene, ctx: UIContext): ServerDataState[] {
+  const player = ctx.video.getPlayer(state.id);
   return [
     section('Video Controls', [
       {
@@ -115,7 +110,7 @@ function getVideoControls(mediaPath: string, state: VideoMedia, ctx: UIContext):
           value: state.track,
           onValueChange: {
             $: 'event',
-            action: ['updateMedia', mediaPath, 'track'],
+            action: ['updateMedia', controlPath, 'track'],
           },
           options: { $: 'ref', ref: ['videoList'] },
         },
@@ -136,7 +131,7 @@ function getVideoControls(mediaPath: string, state: VideoMedia, ctx: UIContext):
               theme: 'blue',
               onPress: {
                 $: 'event',
-                action: ['updateMedia', mediaPath, 'restart'],
+                action: ['updateMedia', controlPath, 'restart'],
               },
             },
           },
@@ -152,7 +147,7 @@ function getVideoControls(mediaPath: string, state: VideoMedia, ctx: UIContext):
                   theme: 'blue',
                   onPress: {
                     $: 'event',
-                    action: ['updateMedia', mediaPath, 'pause'],
+                    action: ['updateMedia', controlPath, 'pause'],
                   },
                 },
               }
@@ -167,7 +162,7 @@ function getVideoControls(mediaPath: string, state: VideoMedia, ctx: UIContext):
                   theme: 'blue',
                   onPress: {
                     $: 'event',
-                    action: ['updateMedia', mediaPath, 'play'],
+                    action: ['updateMedia', controlPath, 'play'],
                   },
                 },
               },
@@ -182,7 +177,7 @@ function getVideoControls(mediaPath: string, state: VideoMedia, ctx: UIContext):
           label: 'Loop Bounce',
           onCheckedChange: {
             $: 'event',
-            action: ['updateMedia', mediaPath, 'loopBounce'],
+            action: ['updateMedia', controlPath, 'loopBounce'],
           },
         },
       },
@@ -195,7 +190,7 @@ function getVideoControls(mediaPath: string, state: VideoMedia, ctx: UIContext):
           label: 'Reverse Playback',
           onCheckedChange: {
             $: 'event',
-            action: ['updateMedia', mediaPath, 'reverse'],
+            action: ['updateMedia', controlPath, 'reverse'],
           },
         },
       },
@@ -247,13 +242,13 @@ function getVideoControls(mediaPath: string, state: VideoMedia, ctx: UIContext):
           icon: icon('Sparkles'),
           onPress: {
             $: 'event',
-            action: ['navigate', `${mediaPath}.effects`],
+            action: ['navigate', `${controlPath}.effects`],
           },
         },
       },
-      ...getGenericMediaUI(mediaPath, state, ctx),
+      ...getGenericMediaUI(controlPath, state, ctx),
     ]),
-  ]
+  ];
 }
 
 function scroll(children: any[]): ServerDataState {
@@ -265,14 +260,10 @@ function scroll(children: any[]): ServerDataState {
       gap: '$4',
     },
     children,
-  }
+  };
 }
 
-function getColorControls(
-  mediaPath: string,
-  state: ColorMedia,
-  context: UIContext
-): ServerDataState[] {
+function getColorControls(controlPath: string, state: ColorScene, context: UIContext): ServerDataState[] {
   return [
     {
       $: 'component',
@@ -293,7 +284,7 @@ function getColorControls(
         value: state.h,
         onValueChange: {
           $: 'event',
-          action: ['updateMedia', mediaPath, 'color', 'h'],
+          action: ['updateMedia', controlPath, 'color', 'h'],
         },
         max: 360,
         min: 0,
@@ -309,7 +300,7 @@ function getColorControls(
         value: state.s,
         onValueChange: {
           $: 'event',
-          action: ['updateMedia', mediaPath, 'color', 's'],
+          action: ['updateMedia', controlPath, 'color', 's'],
         },
         max: 1,
         min: 0,
@@ -325,60 +316,60 @@ function getColorControls(
         value: state.l,
         onValueChange: {
           $: 'event',
-          action: ['updateMedia', mediaPath, 'color', 'l'],
+          action: ['updateMedia', controlPath, 'color', 'l'],
         },
         max: 1,
         min: 0,
         step: 0.01,
       },
     },
-    ...getGenericMediaUI(mediaPath, state, context),
-  ]
+    ...getGenericMediaUI(controlPath, state, context),
+  ];
 }
 
-function extractMediaFieldValue(mediaState: Media, fieldPath: string[]): number {
+function extractMediaFieldValue(sceneState: Media, fieldPath: string[]): number {
   if (fieldPath[0] === 'effects') {
-    const [effects, effectId, fieldKey] = fieldPath
-    if (mediaState.type !== 'video') return 0
-    const effect = mediaState.effects?.find((e) => e.key === effectId)
-    if (!effect || !fieldKey) return 0
-    return effect[fieldKey] || 0
+    const [effects, effectId, fieldKey] = fieldPath;
+    if (sceneState.type !== 'video') return 0;
+    const effect = sceneState.effects?.find((e) => e.key === effectId);
+    if (!effect || !fieldKey) return 0;
+    return effect[fieldKey] || 0;
   }
   if (fieldPath[0] === 'item') {
-    const [itemId, ...restFieldPath] = fieldPath
-    if (mediaState.type !== 'sequence') return 0
-    const item = mediaState.sequence?.find((e) => e.key === itemId)
-    const childMedia = item?.media
-    if (!childMedia || !restFieldPath.length) return 0
-    return extractMediaFieldValue(childMedia, restFieldPath)
+    const [itemId, ...restFieldPath] = fieldPath;
+    if (sceneState.type !== 'sequence') return 0;
+    const item = sceneState.sequence?.find((e) => e.key === itemId);
+    const childMedia = item?.media;
+    if (!childMedia || !restFieldPath.length) return 0;
+    return extractMediaFieldValue(childMedia, restFieldPath);
   }
   if (fieldPath[0] === 'layer') {
-    const [_layer, layerId, ...restFieldPath] = fieldPath
-    if (mediaState.type !== 'layers') return 0
-    const layer = mediaState.layers?.find((e) => e.key === layerId)
-    if (!layer) return 0
-    if (restFieldPath.length === 1 && restFieldPath[0] === 'blendAmount') return layer.blendAmount
-    const childMedia = layer?.media
-    if (!childMedia || !restFieldPath.length) return 0
-    return extractMediaFieldValue(childMedia, restFieldPath)
+    const [_layer, layerId, ...restFieldPath] = fieldPath;
+    if (sceneState.type !== 'layers') return 0;
+    const layer = sceneState.layers?.find((e) => e.key === layerId);
+    if (!layer) return 0;
+    if (restFieldPath.length === 1 && restFieldPath[0] === 'blendAmount') return layer.blendAmount;
+    const childMedia = layer?.media;
+    if (!childMedia || !restFieldPath.length) return 0;
+    return extractMediaFieldValue(childMedia, restFieldPath);
   }
-  return 0
+  return 0;
 }
 
 function dashboardItem(
-  rootMediaKey: 'liveMedia' | 'readyMedia',
+  rootMediaKey: 'liveScene' | 'readyScene',
   itemKey: string,
   midi: DashMidi,
   component: ComponentDataState
 ) {
-  let midiText = ''
-  const buttonIndex = midi.buttons.findIndex((b) => b.key === itemKey)
-  const sliderIndex = midi.sliders.findIndex((b) => b.key === itemKey)
+  let midiText = '';
+  const buttonIndex = midi.buttons.findIndex((b) => b.key === itemKey);
+  const sliderIndex = midi.sliders.findIndex((b) => b.key === itemKey);
   if (buttonIndex >= 0 && buttonIndex <= 3) {
-    midiText = `Button ${buttonIndex + 1}`
+    midiText = `Button ${buttonIndex + 1}`;
   }
   if (sliderIndex >= 0 && sliderIndex <= 3) {
-    midiText = `Slider ${sliderIndex + 1}`
+    midiText = `Slider ${sliderIndex + 1}`;
   }
   return {
     $: 'component',
@@ -412,40 +403,32 @@ function dashboardItem(
         ],
       },
     ],
-  }
+  };
 }
 
 function getMediaFieldLabel(media: Media, path: string[]): string {
   if (path[0] === 'effects') {
-    const [effects, effectId, fieldKey] = path
-    if (media.type !== 'video') return 'Unknown'
-    const effect = media.effects?.find((e) => e.key === effectId)
-    if (!effect) return 'Unknown'
-    return `${effect.type} ${fieldKey}`
+    const [effects, effectId, fieldKey] = path;
+    if (media.type !== 'video') return 'Unknown';
+    const effect = media.effects?.find((e) => e.key === effectId);
+    if (!effect) return 'Unknown';
+    return `${effect.type} ${fieldKey}`;
   }
-  return path.join('.')
-  return path.at(-1)
+  return path.join('.');
+  return path.at(-1);
 }
 
-function getFieldLabel(
-  path: string[],
-  rootMediaKey: 'liveMedia' | 'readyMedia',
-  context: UIContext
-): string {
-  const media = context.mainState[rootMediaKey]
-  return getMediaFieldLabel(media, path)
+function getFieldLabel(path: string[], rootMediaKey: 'liveScene' | 'readyScene', context: UIContext): string {
+  const media = context.mainState[rootMediaKey];
+  return getMediaFieldLabel(media, path);
 }
 
-export function getDashboardUI(
-  state: MainState,
-  context: UIContext,
-  rootMediaKey: 'liveMedia' | 'readyMedia'
-) {
-  const dash = state[rootMediaKey === 'liveMedia' ? 'liveDashboard' : 'readyDashboard']
-  const mediaState = state[rootMediaKey === 'liveMedia' ? 'liveMedia' : 'readyMedia']
-  const midi = getDashboardMidiFields(dash, rootMediaKey)
+export function getDashboardUI(state: MainState, context: UIContext, rootMediaKey: 'liveScene' | 'readyScene') {
+  const dash = state[rootMediaKey === 'liveScene' ? 'liveDashboard' : 'readyDashboard'];
+  const sceneState = state[rootMediaKey === 'liveScene' ? 'liveScene' : 'readyScene'];
+  const midi = getDashboardMidiFields(dash, rootMediaKey);
   return scroll([
-    title(rootMediaKey === 'liveMedia' ? 'Live Dashboard' : 'Ready Dashboard'),
+    title(rootMediaKey === 'liveScene' ? 'Live Dashboard' : 'Ready Dashboard'),
     {
       $: 'component',
       component: 'YStack',
@@ -462,7 +445,7 @@ export function getDashboardUI(
                 action: ['updateValuesIndex', `${rootMediaKey}.${item.field}`, 'bounce'],
               },
             },
-          })
+          });
         }
         if (item.behavior === 'goNextButton') {
           return dashboardItem(rootMediaKey, item.key, midi, {
@@ -472,17 +455,13 @@ export function getDashboardUI(
             props: {
               onPress: {
                 $: 'event',
-                action: [
-                  'updateMedia',
-                  item.field ? `${rootMediaKey}.${item.field}` : rootMediaKey,
-                  'goNext',
-                ],
+                action: ['updateMedia', item.field ? `${rootMediaKey}.${item.field}` : rootMediaKey, 'goNext'],
               },
             },
-          })
+          });
         }
         if (item.behavior === 'slider') {
-          const value = extractMediaFieldValue(mediaState, item.field.split('.'))
+          const value = extractMediaFieldValue(sceneState, item.field.split('.'));
           return dashboardItem(rootMediaKey, item.key, midi, {
             $: 'component',
             component: 'RiseSliderField',
@@ -497,11 +476,11 @@ export function getDashboardUI(
               max: item.max,
               step: item.step,
             },
-          })
+          });
         }
       }),
     },
-  ])
+  ]);
 }
 
 export function getEffectsUI(
@@ -549,10 +528,10 @@ export function getEffectsUI(
             $: 'event',
             action: ['navigate', `${mediaLinkPath}.effects.${effect.key}`],
           },
-        }
+        };
       }),
     },
-  }
+  };
 }
 
 function gradientValueField(
@@ -563,14 +542,12 @@ function gradientValueField(
   eventAction: any[],
   opts: { min?: number; max?: number; step?: number }
 ): ComponentDataState {
-  const [rootMediaKey, ...mediaPath] = key?.split('.') || []
-  // const rootMedia = context.mainState[rootMediaKey === 'liveMedia' ? 'liveMedia' : 'readyMedia']
+  const [rootMediaKey, ...controlPath] = key?.split('.') || [];
+  // const rootMedia = context.mainState[rootMediaKey === 'liveScene' ? 'liveScene' : 'readyScene']
   const sliderFields =
-    rootMediaKey === 'liveMedia'
-      ? context.mainState.liveSliderFields
-      : context.mainState.readySliderFields
-  const sliderField = sliderFields[mediaPath.join('.')]
-  const bounceDuration = sliderField?.bounceDuration || DefaultBounceDuration
+    rootMediaKey === 'liveScene' ? context.mainState.liveSliderFields : context.mainState.readySliderFields;
+  const sliderField = sliderFields[controlPath.join('.')];
+  const bounceDuration = sliderField?.bounceDuration || DefaultBounceDuration;
   return {
     $: 'component',
     key: key || undefined,
@@ -698,7 +675,7 @@ function gradientValueField(
       },
       ...opts,
     },
-  }
+  };
 }
 
 function title(title: string): ComponentDataState {
@@ -709,7 +686,7 @@ function title(title: string): ComponentDataState {
     props: {
       title,
     },
-  }
+  };
 }
 
 export function getEffectUI(effectPath: string, effect: Effect, context: UIContext) {
@@ -732,22 +709,15 @@ export function getEffectUI(effectPath: string, effect: Effect, context: UIConte
         },
       ],
     },
-  }
+  };
   if (effect.type === 'desaturate') {
     return section('Desaturate', [
       title('Desaturate'),
-      gradientValueField(
-        context,
-        `${effectPath}.value`,
-        'Value',
-        effect.value,
-        ['updateEffect', effectPath, 'value'],
-        {
-          max: 1,
-          min: 0,
-          step: 0.01,
-        }
-      ),
+      gradientValueField(context, `${effectPath}.value`, 'Value', effect.value, ['updateEffect', effectPath, 'value'], {
+        max: 1,
+        min: 0,
+        step: 0.01,
+      }),
       // {
       //   $: 'component',
       //   key: 'value',
@@ -765,24 +735,17 @@ export function getEffectUI(effectPath: string, effect: Effect, context: UIConte
       //   },
       // },
       removeEffect,
-    ])
+    ]);
   } else if (effect.type === 'hueShift') {
     return section('Hue Shift', [
       title('Hue Shift'),
-      gradientValueField(
-        context,
-        `${effectPath}.value`,
-        'Value',
-        effect.value,
-        ['updateEffect', effectPath, 'value'],
-        {
-          max: 180,
-          min: -180,
-          step: 1,
-        }
-      ),
+      gradientValueField(context, `${effectPath}.value`, 'Value', effect.value, ['updateEffect', effectPath, 'value'], {
+        max: 180,
+        min: -180,
+        step: 1,
+      }),
       removeEffect,
-    ])
+    ]);
   } else if (effect.type === 'colorize') {
     return section('Colorize', [
       title('Colorize'),
@@ -808,18 +771,11 @@ export function getEffectUI(effectPath: string, effect: Effect, context: UIConte
           borderRadius: '$3',
         },
       },
-      gradientValueField(
-        context,
-        `${effectPath}.hue`,
-        'Hue',
-        effect.hue,
-        ['updateEffect', effectPath, 'hue'],
-        {
-          max: 360,
-          min: 0,
-          step: 1,
-        }
-      ),
+      gradientValueField(context, `${effectPath}.hue`, 'Hue', effect.hue, ['updateEffect', effectPath, 'hue'], {
+        max: 360,
+        min: 0,
+        step: 1,
+      }),
       gradientValueField(
         context,
         `${effectPath}.saturation`,
@@ -833,7 +789,7 @@ export function getEffectUI(effectPath: string, effect: Effect, context: UIConte
         }
       ),
       removeEffect,
-    ])
+    ]);
   } else if (effect.type === 'rotate') {
     return section('Rotate', [
       title('Rotate'),
@@ -854,57 +810,43 @@ export function getEffectUI(effectPath: string, effect: Effect, context: UIConte
         },
       },
       removeEffect,
-    ])
+    ]);
   } else if (effect.type === 'darken') {
     return section('Darken', [
       title('Darken'),
-      gradientValueField(
-        context,
-        `${effectPath}.value`,
-        'Value',
-        effect.value,
-        ['updateEffect', effectPath, 'value'],
-        {
-          max: 1,
-          min: 0,
-          step: 0.01,
-        }
-      ),
+      gradientValueField(context, `${effectPath}.value`, 'Value', effect.value, ['updateEffect', effectPath, 'value'], {
+        max: 1,
+        min: 0,
+        step: 0.01,
+      }),
       removeEffect,
-    ])
+    ]);
   } else if (effect.type === 'brighten') {
     return section('Brighten', [
       title('Brighten'),
-      gradientValueField(
-        context,
-        `${effectPath}.value`,
-        'Value',
-        effect.value,
-        ['updateEffect', effectPath, 'value'],
-        {
-          max: 1,
-          min: 0,
-          step: 0.01,
-        }
-      ),
+      gradientValueField(context, `${effectPath}.value`, 'Value', effect.value, ['updateEffect', effectPath, 'value'], {
+        max: 1,
+        min: 0,
+        step: 0.01,
+      }),
       removeEffect,
-    ])
+    ]);
   }
-  return section(`Effect: ${effect.type}`, [removeEffect])
+  return section(`Effect: ${effect.type}`, [removeEffect]);
 }
-function getVideoTitle(state: VideoMedia, ctx: UIContext): string {
-  if (state.track === null) return 'Video - Empty'
-  const title = ctx.video.getTrackTitle(state.track)
-  return title
+function getVideoTitle(state: VideoScene, ctx: UIContext): string {
+  if (state.track === null) return 'Video - Empty';
+  const title = ctx.video.getTrackTitle(state.track);
+  return title;
 }
 
 export function getMediaTitle(state: Media, ctx: UIContext): string {
-  if (state.label) return state.label
-  if (state.type === 'color') return 'Color'
-  if (state.type === 'sequence') return 'Sequence'
-  if (state.type === 'layers') return 'Layers'
-  if (state.type === 'video') return getVideoTitle(state, ctx)
-  return 'Media'
+  if (state.label) return state.label;
+  if (state.type === 'color') return 'Color';
+  if (state.type === 'sequence') return 'Sequence';
+  if (state.type === 'layers') return 'Layers';
+  if (state.type === 'video') return getVideoTitle(state, ctx);
+  return 'Media';
 }
 
 const newMediaOptions = [
@@ -913,13 +855,9 @@ const newMediaOptions = [
   { key: 'video', label: 'Video' },
   { key: 'layers', label: 'Layers' },
   { key: 'sequence', label: 'Sequence' },
-]
+];
 
-export function getMediaControls(
-  state: Media,
-  mediaLinkPath: string,
-  ctx: UIContext
-): ServerDataState[] {
+export function getMediaControls(state: Media, mediaLinkPath: string, ctx: UIContext): ServerDataState[] {
   return [
     {
       $: 'component',
@@ -966,16 +904,13 @@ export function getMediaControls(
                 icon: icon('LayoutDashboard'),
                 onPress: {
                   $: 'event',
-                  action: [
-                    'navigate',
-                    mediaLinkPath === 'liveMedia' ? 'liveDashboard' : 'readyDashboard',
-                  ],
+                  action: ['navigate', mediaLinkPath === 'liveScene' ? 'liveDashboard' : 'readyDashboard'],
                 },
               },
             },
           ],
         },
-  ]
+  ];
 }
 
 export function getTransitionControls(
@@ -1044,17 +979,14 @@ export function getTransitionControls(
         ],
       },
     },
-  ]
+  ];
 }
 
 export function getUIRoot(state: MainState, context: UIContext) {
   return scroll([
-    section('Live', getMediaControls(state.liveMedia, 'liveMedia', context)),
-    section(
-      'Transition',
-      getTransitionControls(state.transition, 'mainTransition', state.transitionState, context)
-    ),
-    section('Ready', getMediaControls(state.readyMedia, 'readyMedia', context)),
+    section('Live', getMediaControls(state.liveScene, 'liveScene', context)),
+    section('Transition', getTransitionControls(state.transition, 'mainTransition', state.transitionState, context)),
+    section('Ready', getMediaControls(state.readyScene, 'readyScene', context)),
     section('Library', [
       {
         $: 'component',
@@ -1067,7 +999,7 @@ export function getUIRoot(state: MainState, context: UIContext) {
         },
       },
     ]),
-  ])
+  ]);
 }
 
 //  function getUIRootLegacy(state: MainState) {
@@ -1189,8 +1121,8 @@ export function getUIRoot(state: MainState, context: UIContext) {
 // }
 
 function getLayersControls(
-  mediaPath: string,
-  state: LayersMedia,
+  controlPath: string,
+  state: LayersScene,
   ctx: UIContext,
   { header = [], footer = [] }: { header?: ServerDataState[]; footer?: ServerDataState[] } = {}
 ): ServerDataState {
@@ -1200,7 +1132,7 @@ function getLayersControls(
     props: {
       onReorder: {
         $: 'event',
-        action: ['updateMedia', mediaPath, 'layerOrder'],
+        action: ['updateMedia', controlPath, 'layerOrder'],
       },
       header: {
         $: 'component',
@@ -1221,7 +1153,7 @@ function getLayersControls(
               options: newMediaOptions,
               onSelect: {
                 $: 'event',
-                action: ['updateMedia', mediaPath, 'addLayer'],
+                action: ['updateMedia', controlPath, 'addLayer'],
               },
               buttonProps: {
                 icon: icon('Plus'),
@@ -1230,7 +1162,7 @@ function getLayersControls(
             },
           },
           ...footer,
-          ...getGenericMediaUI(mediaPath, state, ctx),
+          ...getGenericMediaUI(controlPath, state, ctx),
         ],
       },
       items: (state.layers || []).map((layer) => {
@@ -1239,28 +1171,28 @@ function getLayersControls(
           label: getMediaTitle(layer.media, ctx),
           onPress: {
             $: 'event',
-            action: ['navigate', `${mediaPath}.layer.${layer.key}`],
+            action: ['navigate', `${controlPath}.layer.${layer.key}`],
           },
-        }
+        };
       }),
     },
-  }
+  };
 }
 
 function getSequenceControls(
-  mediaPath: string,
-  state: SequenceMedia,
+  controlPath: string,
+  state: SequenceScene,
   ctx: UIContext,
   footer: ServerDataState[] = []
 ): ServerDataState {
-  const activeMedia = getSequenceActiveItem(state)
+  const activeMedia = getSequenceActiveItem(state);
   return {
     $: 'component',
     component: 'RiseSortableList',
     props: {
       onReorder: {
         $: 'event',
-        action: ['updateMedia', mediaPath, 'sequenceOrder'],
+        action: ['updateMedia', controlPath, 'sequenceOrder'],
       },
       header: section('Sequence Controls', [
         {
@@ -1275,7 +1207,7 @@ function getSequenceControls(
                 component: 'Button',
                 children: 'Save to Dashboard',
                 props: {
-                  onPress: { $: 'event', action: ['updateMedia', mediaPath, 'saveGoNextToDash'] },
+                  onPress: { $: 'event', action: ['updateMedia', controlPath, 'saveGoNextToDash'] },
                 },
               },
             ],
@@ -1285,7 +1217,7 @@ function getSequenceControls(
             },
             onPress: {
               $: 'event',
-              action: ['updateMedia', mediaPath, 'goNext'],
+              action: ['updateMedia', controlPath, 'goNext'],
             },
           },
         },
@@ -1307,7 +1239,7 @@ function getSequenceControls(
               value: state.transition?.duration || DefaultTransitionDuration,
               onValueChange: {
                 $: 'event',
-                action: ['updateMedia', mediaPath, 'transitionDuration'],
+                action: ['updateMedia', controlPath, 'transitionDuration'],
               },
             },
           },
@@ -1319,7 +1251,7 @@ function getSequenceControls(
               options: newMediaOptions,
               onSelect: {
                 $: 'event',
-                action: ['updateMedia', mediaPath, 'addToSequence'],
+                action: ['updateMedia', controlPath, 'addToSequence'],
               },
               buttonProps: {
                 icon: icon('Plus'),
@@ -1338,7 +1270,7 @@ function getSequenceControls(
               })),
               onSelect: {
                 $: 'event',
-                action: ['updateMedia', mediaPath, 'addToSequenceFromLibrary'],
+                action: ['updateMedia', controlPath, 'addToSequenceFromLibrary'],
               },
               buttonProps: {
                 icon: icon('Plus'),
@@ -1346,7 +1278,7 @@ function getSequenceControls(
               },
             },
           },
-          ...getGenericMediaUI(mediaPath, state, ctx),
+          ...getGenericMediaUI(controlPath, state, ctx),
           ...footer,
         ],
       },
@@ -1356,21 +1288,17 @@ function getSequenceControls(
           label: `${getMediaTitle(item.media, ctx)}${item.key === activeMedia?.key ? ' (Active)' : ''}${item.key === state.nextActiveKey ? ' (Transitioning)' : ''}`,
           onPress: {
             $: 'event',
-            action: ['navigate', `${mediaPath}.item.${item.key}`],
+            action: ['navigate', `${controlPath}.item.${item.key}`],
           },
-        }
+        };
       }),
     },
-  }
+  };
 }
 
-export function getMediaLayerUI(
-  mediaPath: string,
-  layer: Layer,
-  context: UIContext
-): ServerDataState {
+export function getMediaLayerUI(controlPath: string, layer: Layer, context: UIContext): ServerDataState {
   // return [title('Hello world')]
-  return getMediaUI(mediaPath, layer.media, context, {
+  return getMediaUI(controlPath, layer.media, context, {
     footer: [],
     header: [
       section('Layer Controls', [
@@ -1383,7 +1311,7 @@ export function getMediaLayerUI(
             label: 'Blend Mode',
             onValueChange: {
               $: 'event',
-              action: ['updateMedia', mediaPath, 'blendMode'],
+              action: ['updateMedia', controlPath, 'blendMode'],
             },
             options: [
               { key: 'mix', label: 'Blend' },
@@ -1394,10 +1322,10 @@ export function getMediaLayerUI(
         },
         gradientValueField(
           context,
-          `${mediaPath}.blendAmount`,
+          `${controlPath}.blendAmount`,
           'Value',
           layer.blendAmount,
-          ['updateMedia', mediaPath, 'blendAmount'],
+          ['updateMedia', controlPath, 'blendAmount'],
           {
             max: 1,
             min: 0,
@@ -1411,7 +1339,7 @@ export function getMediaLayerUI(
         //   props: {
         //     onValueChange: {
         //       $: 'event',
-        //       action: ['updateMedia', mediaPath, 'blendAmount'],
+        //       action: ['updateMedia', controlPath, 'blendAmount'],
         //     },
         //     label: 'Blend Amount',
         //     value: layer.blendAmount,
@@ -1437,7 +1365,7 @@ export function getMediaLayerUI(
                 onPress: [
                   {
                     $: 'event',
-                    action: ['updateMedia', mediaPath, 'removeLayer', layer.key],
+                    action: ['updateMedia', controlPath, 'removeLayer', layer.key],
                   },
                   {
                     $: 'event',
@@ -1450,7 +1378,7 @@ export function getMediaLayerUI(
         },
       ]),
     ],
-  })
+  });
 }
 
 export function getLibraryUI(keys: string[]): ServerDataState[] {
@@ -1470,7 +1398,7 @@ export function getLibraryUI(keys: string[]): ServerDataState[] {
         },
       }))
     ),
-  ]
+  ];
 }
 
 export function getLibraryKeyUI(key: string): ComponentDataState[] {
@@ -1501,16 +1429,16 @@ export function getLibraryKeyUI(key: string): ComponentDataState[] {
         ],
       },
     },
-  ]
+  ];
 }
-function getResetDropdown(mediaPath: string, hidden: boolean = false): ComponentDataState {
+function getResetDropdown(controlPath: string, hidden: boolean = false): ComponentDataState {
   const buttonProps = hidden
     ? null
     : {
         icon: icon('Delete'),
         theme: 'red',
         children: 'Reset...',
-      }
+      };
   return {
     $: 'component',
     component: 'RiseDropdownButton',
@@ -1519,12 +1447,12 @@ function getResetDropdown(mediaPath: string, hidden: boolean = false): Component
       options: newMediaOptions,
       onSelect: {
         $: 'event',
-        action: ['updateMedia', mediaPath, 'mode'],
+        action: ['updateMedia', controlPath, 'mode'],
       },
     },
-  }
+  };
 }
-function getGenericMediaUI(mediaPath: string, media: Media, ctx: UIContext): ComponentDataState[] {
+function getGenericMediaUI(controlPath: string, media: Media, ctx: UIContext): ComponentDataState[] {
   return [
     {
       $: 'component',
@@ -1539,11 +1467,11 @@ function getGenericMediaUI(mediaPath: string, media: Media, ctx: UIContext): Com
         icon: icon('LibraryBig'),
         onPress: {
           $: 'event',
-          action: ['updateMedia', mediaPath, 'saveMedia'],
+          action: ['updateMedia', controlPath, 'saveMedia'],
         },
       },
     },
-    getResetDropdown(mediaPath),
+    getResetDropdown(controlPath),
     {
       $: 'component',
       component: 'Button',
@@ -1553,7 +1481,7 @@ function getGenericMediaUI(mediaPath: string, media: Media, ctx: UIContext): Com
         iconAfter: icon('ChevronDown'),
         // onPress: {
         //   $: 'event',
-        //   action: ['updateMedia', mediaPath, 'saveMedia'],
+        //   action: ['updateMedia', controlPath, 'saveMedia'],
         // },
       },
     },
@@ -1598,7 +1526,7 @@ function getGenericMediaUI(mediaPath: string, media: Media, ctx: UIContext): Com
                     gap: '$4',
                     onSubmit: {
                       $: 'event',
-                      action: ['updateMedia', mediaPath, 'metadata'],
+                      action: ['updateMedia', controlPath, 'metadata'],
                     },
                     // Comment this out to test async event handling
                     // onSubmit: asyncHandler(async (args: any) => {
@@ -1609,7 +1537,7 @@ function getGenericMediaUI(mediaPath: string, media: Media, ctx: UIContext): Com
                     //   })
                     //   // form submitted
                     //   // {"target":{"component":"RiseForm","propKey":"onSubmit",
-                    //   // "path":"liveMedia:layer:e71e8271-9dc9-40c0-987b-1000d04f0df3"},
+                    //   // "path":"liveScene:layer:e71e8271-9dc9-40c0-987b-1000d04f0df3"},
                     //   // "dataState":{"$":"event","key":"26f727b2-7c28-4736-a3d7-a1102e859fcb","async":true},
                     //   // "payload":{"name":"dd"}}
                     // }),
@@ -1676,10 +1604,10 @@ function getGenericMediaUI(mediaPath: string, media: Media, ctx: UIContext): Com
         },
       ],
     },
-  ]
+  ];
 }
 
-function getSequenceItemMaxDuration(mediaPath: string, item: SequenceItem): ServerDataState[] {
+function getSequenceItemMaxDuration(controlPath: string, item: SequenceItem): ServerDataState[] {
   const checkField: ServerDataState = {
     $: 'component',
     key: 'maxDurationSwitch',
@@ -1689,11 +1617,11 @@ function getSequenceItemMaxDuration(mediaPath: string, item: SequenceItem): Serv
       value: !!item.maxDuration,
       onCheckedChange: {
         $: 'event',
-        action: ['updateMedia', mediaPath, 'maxDuration'],
+        action: ['updateMedia', controlPath, 'maxDuration'],
       },
     },
-  }
-  if (item.maxDuration == null || item.maxDuration == false) return [checkField]
+  };
+  if (item.maxDuration == null || item.maxDuration == false) return [checkField];
   return [
     checkField,
     {
@@ -1705,7 +1633,7 @@ function getSequenceItemMaxDuration(mediaPath: string, item: SequenceItem): Serv
         value: item.maxDuration,
         onValueChange: {
           $: 'event',
-          action: ['updateMedia', mediaPath, 'maxDuration'],
+          action: ['updateMedia', controlPath, 'maxDuration'],
         },
         longPressSheet: [
           {
@@ -1714,7 +1642,7 @@ function getSequenceItemMaxDuration(mediaPath: string, item: SequenceItem): Serv
             props: {
               onPress: {
                 $: 'event',
-                action: ['updateMedia', mediaPath, 'maxDuration', 30],
+                action: ['updateMedia', controlPath, 'maxDuration', 30],
               },
             },
             children: '30 sec',
@@ -1725,7 +1653,7 @@ function getSequenceItemMaxDuration(mediaPath: string, item: SequenceItem): Serv
             props: {
               onPress: {
                 $: 'event',
-                action: ['updateMedia', mediaPath, 'maxDuration', 60],
+                action: ['updateMedia', controlPath, 'maxDuration', 60],
               },
             },
             children: '60 sec (1 min)',
@@ -1736,7 +1664,7 @@ function getSequenceItemMaxDuration(mediaPath: string, item: SequenceItem): Serv
             props: {
               onPress: {
                 $: 'event',
-                action: ['updateMedia', mediaPath, 'maxDuration', 120],
+                action: ['updateMedia', controlPath, 'maxDuration', 120],
               },
             },
             children: '120 sec (2 min)',
@@ -1747,7 +1675,7 @@ function getSequenceItemMaxDuration(mediaPath: string, item: SequenceItem): Serv
             props: {
               onPress: {
                 $: 'event',
-                action: ['updateMedia', mediaPath, 'maxDuration', 300],
+                action: ['updateMedia', controlPath, 'maxDuration', 300],
               },
             },
             children: '300 sec (5 min)',
@@ -1758,7 +1686,7 @@ function getSequenceItemMaxDuration(mediaPath: string, item: SequenceItem): Serv
             props: {
               onPress: {
                 $: 'event',
-                action: ['updateMedia', mediaPath, 'maxDuration', 600],
+                action: ['updateMedia', controlPath, 'maxDuration', 600],
               },
             },
             children: '600 sec (10 min)',
@@ -1769,15 +1697,11 @@ function getSequenceItemMaxDuration(mediaPath: string, item: SequenceItem): Serv
         step: 0.1,
       },
     },
-  ]
+  ];
 }
 
-export function getMediaSequenceUI(
-  mediaPath: string,
-  item: SequenceItem,
-  context: UIContext
-): ServerDataState {
-  let videoEnd: ServerDataState[] = []
+export function getMediaSequenceUI(controlPath: string, item: SequenceItem, context: UIContext): ServerDataState {
+  let videoEnd: ServerDataState[] = [];
   if (item.media.type === 'video') {
     videoEnd = [
       {
@@ -1789,18 +1713,18 @@ export function getMediaSequenceUI(
           label: 'Go Next on Video End',
           onCheckedChange: {
             $: 'event',
-            action: ['updateMedia', mediaPath, 'goOnVideoEnd'],
+            action: ['updateMedia', controlPath, 'goOnVideoEnd'],
           },
         },
       },
-    ]
+    ];
   }
-  return getMediaUI(mediaPath, item.media, context, {
+  return getMediaUI(controlPath, item.media, context, {
     header: [
       section(
         'Sequence Item Controls',
         [
-          ...getSequenceItemMaxDuration(mediaPath, item),
+          ...getSequenceItemMaxDuration(controlPath, item),
           ...videoEnd,
           {
             $: 'component',
@@ -1813,7 +1737,7 @@ export function getMediaSequenceUI(
               onPress: [
                 {
                   $: 'event',
-                  action: ['updateMedia', mediaPath, 'removeItem', item.key],
+                  action: ['updateMedia', controlPath, 'removeItem', item.key],
                 },
                 {
                   $: 'event',
@@ -1826,38 +1750,38 @@ export function getMediaSequenceUI(
         'heading'
       ),
     ],
-  })
+  });
 }
 
 export function getMediaUI(
-  mediaPath: string,
-  mediaState: Media,
+  controlPath: string,
+  sceneState: Media,
   ctx: UIContext,
   { header = [], footer = [] }: { header?: ServerDataState[]; footer?: ServerDataState[] } = {}
 ): ServerDataState {
-  if (mediaState.type === 'color') {
-    return scroll([...header, ...getColorControls(mediaPath, mediaState, ctx), ...footer])
+  if (sceneState.type === 'color') {
+    return scroll([...header, ...getColorControls(controlPath, sceneState, ctx), ...footer]);
   }
-  if (mediaState.type === 'video') {
-    return scroll([...header, ...getVideoControls(mediaPath, mediaState, ctx), ...footer])
+  if (sceneState.type === 'video') {
+    return scroll([...header, ...getVideoControls(controlPath, sceneState, ctx), ...footer]);
   }
-  if (mediaState.type === 'sequence') {
-    return getSequenceControls(mediaPath, mediaState, ctx)
+  if (sceneState.type === 'sequence') {
+    return getSequenceControls(controlPath, sceneState, ctx);
   }
-  if (mediaState.type === 'layers') {
-    return getLayersControls(mediaPath, mediaState, ctx, { header, footer })
+  if (sceneState.type === 'layers') {
+    return getLayersControls(controlPath, sceneState, ctx, { header, footer });
   }
   return scroll([
     ...header,
-    title(mediaState.type),
+    title(sceneState.type),
     {
       $: 'component',
       component: 'Text',
-      children: mediaState.type,
+      children: sceneState.type,
     },
-    getResetDropdown(mediaPath, true),
+    getResetDropdown(controlPath, true),
     ...footer,
-  ])
+  ]);
 }
 
 // export function getQuickEffects(): ServerDataState {

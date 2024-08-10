@@ -1,5 +1,5 @@
 import { query } from '@rise-tools/server';
-import { mediaPath } from './paths';
+import { controlPath } from './paths';
 import { readFile } from 'fs/promises';
 import { basename, join } from 'path';
 import { z } from 'zod';
@@ -37,7 +37,7 @@ const mediaIndexSchema = z.object({
 });
 
 export const mediaIndex = query(async () => {
-  const mediaIndex = join(mediaPath, 'index.json');
+  const mediaIndex = join(controlPath, 'index.json');
   const indexData = JSON.parse(await readFile(mediaIndex, { encoding: 'utf-8' }));
   const index = mediaIndexSchema.parse(indexData);
   return {

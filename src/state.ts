@@ -1,20 +1,9 @@
-import {
-  Text,
-  YStack,
-  Button,
-  BottomSheet,
-  BottomSheetTriggerButton,
-  BottomSheetCloseButton,
-} from '@rise-tools/kitchen-sink/server';
-import { navigate } from '@rise-tools/kit-react-navigation/server';
-import { lookup, query, view, state } from '@rise-tools/server';
-import { readFile, writeFile, readdir } from 'fs/promises';
-import { existsSync } from 'fs';
-import { defaultMainState, MainState, MainStateSchema, Media, VideoMedia } from './state-schema';
+import { lookup, state, view } from '@rise-tools/server';
 import { randomUUID } from 'crypto';
-import { mainStatePath, mediaPath } from './paths';
-import { join } from 'path';
-import { MediaIndex, mediaIndex } from './media';
+import { existsSync } from 'fs';
+import { readFile, writeFile } from 'fs/promises';
+import { mainStatePath } from './paths';
+import { defaultMainState, MainState, MainStateSchema, Media } from './state-schema';
 
 const [_mainState, setMainState] = state<MainState | null>(null);
 
@@ -47,7 +36,7 @@ async function init() {
 
 let mainStateToDiskTimeout: undefined | NodeJS.Timeout = undefined;
 
-function mainStateUpdate(updater: (state: MainState) => MainState) {
+export function mainStateUpdate(updater: (state: MainState) => MainState) {
   clearTimeout(mainStateToDiskTimeout);
   setMainState((mainState) => {
     if (!mainState) throw new Error('Cannot update main state, it is not inited yet');
@@ -67,19 +56,19 @@ function updateMediaState(prevState: Media, path: string[], updater: (media: Med
   throw new Error('lol not implemented');
 }
 
-export function updateRootMedia(mediaPath: string, updater: (media: Media) => Media) {
-  const path = mediaPath.split(':');
+export function updateRootMedia(controlPath: string, updater: (media: Media) => Media) {
+  const path = controlPath.split(':');
   mainStateUpdate((state) => {
     if (path[0] === 'live') {
       return {
         ...state,
-        liveMedia: updateMediaState(state.liveMedia, path.slice(1), updater),
+        liveScene: updateMediaState(state.liveScene, path.slice(1), updater),
       };
     }
     if (path[0] === 'ready') {
       return {
         ...state,
-        readyMedia: updateMediaState(state.readyMedia, path.slice(1), updater),
+        readyScene: updateMediaState(state.readyScene, path.slice(1), updater),
       };
     }
     return state;
@@ -99,15 +88,15 @@ function drillMediaState(media: Media, path: string[]) {
 function drillRootMediaState(state: MainState | null, path: string[]): Media | null {
   if (!state) return null;
   const [mediaId, ...rest] = path;
-  if (mediaId === 'live') return drillMediaState(state.liveMedia, rest);
-  if (mediaId === 'ready') return drillMediaState(state.readyMedia, rest);
+  if (mediaId === 'live') return drillMediaState(state.liveScene, rest);
+  if (mediaId === 'ready') return drillMediaState(state.readyScene, rest);
   return null;
 }
 
-export const mediaState = lookup((mediaPath) => {
+export const sceneState = lookup((controlPath) => {
   return view((get) => {
     const state = get(mainState);
-    const path = mediaPath.split(':');
+    const path = controlPath.split(':');
     return drillRootMediaState(state!, path);
   });
 });

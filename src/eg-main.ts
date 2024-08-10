@@ -1,11 +1,6 @@
-import {
-  DefaultBounceAmount,
-  DefaultBounceDuration,
-  DefaultSmoothing,
-  DefaultTransitionDuration,
-} from './constants'
-import { eg as egInfo, EGInfo } from './eg'
-import { Frame } from './eg-sacn'
+import { DefaultBounceAmount, DefaultBounceDuration, DefaultSmoothing, DefaultTransitionDuration } from './constants';
+import { eg as egInfo, EGInfo } from './eg';
+import { Frame } from './eg-sacn';
 import {
   createSolidHSLFrame,
   createSolidRGBFrame,
@@ -19,27 +14,27 @@ import {
   frameMask,
   frameMix,
   frameRotate,
-} from './eg-tools'
+} from './eg-tools';
 import {
   BrightenEffect,
   ColorizeEffect,
-  ColorMedia,
+  ColorScene,
   DarkenEffect,
   DesaturateEffect,
   Effect,
   Effects,
   HueShiftEffect,
   InvertEffect,
-  LayersMedia,
+  LayersScene,
   MainState,
   Media,
   RotateEffect,
   SequenceItem,
-  SequenceMedia,
+  SequenceScene,
   StateContext,
   Transition,
-  VideoMedia,
-} from './state-schema'
+  VideoScene,
+} from './state-schema';
 
 // const readyVideoPlayers: Record<string, undefined | VideoPlayer> = {}
 // const loadingVideoPlayers: Record<string, undefined | Promise<void>> = {}
@@ -139,31 +134,28 @@ import {
 //   return outputFrame
 // }
 
-const blackFrame = createSolidRGBFrame(egInfo, 0, 0, 0)
+const blackFrame = createSolidRGBFrame(egInfo, 0, 0, 0);
 
-const defaultInflectionPoint = 0.25
+const defaultInflectionPoint = 0.25;
 
 /**
  * Straight lines. Linear up and down.
  * @param completedProgress 0-1
  */
-function getAsymmetricLinearBounce(
-  completedProgress: number,
-  inflectionPoint = defaultInflectionPoint
-): number {
+function getAsymmetricLinearBounce(completedProgress: number, inflectionPoint = defaultInflectionPoint): number {
   // Validate input ranges
-  if (completedProgress < 0) return 0
-  if (completedProgress > 1) return 1
-  if (inflectionPoint < 0) inflectionPoint = 0
-  if (inflectionPoint > 1) inflectionPoint = 1
+  if (completedProgress < 0) return 0;
+  if (completedProgress > 1) return 1;
+  if (inflectionPoint < 0) inflectionPoint = 0;
+  if (inflectionPoint > 1) inflectionPoint = 1;
 
   if (completedProgress < inflectionPoint) {
     // map input 0-inflectionPoint to 0-1
-    return completedProgress / inflectionPoint
+    return completedProgress / inflectionPoint;
   }
 
   // Handle down slope
-  return (1 - completedProgress) / (1 - inflectionPoint)
+  return (1 - completedProgress) / (1 - inflectionPoint);
 }
 
 /**
@@ -173,14 +165,11 @@ function getAsymmetricLinearBounce(
  * @return 0-1
  */
 function normalizedSinusoid(input: number): number {
-  return Math.cos(2 * Math.PI * (1 - input)) / 2 + 0.5
+  return Math.cos(2 * Math.PI * (1 - input)) / 2 + 0.5;
 }
 
-function getAsymmetricSmoothBounce(
-  completedProgress: number,
-  inflectionPoint = defaultInflectionPoint
-): number {
-  return normalizedSigmoid(getAsymmetricLinearBounce(completedProgress, inflectionPoint))
+function getAsymmetricSmoothBounce(completedProgress: number, inflectionPoint = defaultInflectionPoint): number {
+  return normalizedSigmoid(getAsymmetricLinearBounce(completedProgress, inflectionPoint));
   // return normalizedSinusoid(getAsymmetricLinearBounce(completedProgress, inflectionPoint))
 }
 
@@ -191,229 +180,169 @@ function getAsymmetricSmoothBounce(
  * @return 0-1
  */
 function normalizedSigmoid(input: number): number {
-  if (input > 1) return 1
-  if (input < 0) return 0
+  if (input > 1) return 1;
+  if (input < 0) return 0;
 
   // "Normal" sigmoid starts climbing at about -6 and gets to 99.7% by +6
-  const k = 12
-  const x0 = 0.5
+  const k = 12;
+  const x0 = 0.5;
 
   // Shift so that the function is centered at an input of 0.5
-  input -= x0
+  input -= x0;
   // Scale to 0-1 domain
-  input *= k
+  input *= k;
 
-  return 1 / (1 + Math.exp(-input))
+  return 1 / (1 + Math.exp(-input));
 }
 
 function applyGradientValue(destValue: number, valuePath: string, ctx: StateContext) {
-  let nextValue = destValue
-  const recentValue = ctx.recentGradientValues[valuePath]
-  const [mainStateKey, ...restValuePath] = valuePath.split('.')
-  const sliderFields =
-    ctx.mainState[mainStateKey === 'liveMedia' ? 'liveSliderFields' : 'readySliderFields']
-  const slider = sliderFields[restValuePath.join('.')]
+  let nextValue = destValue;
+  const recentValue = ctx.recentGradientValues[valuePath];
+  const [mainStateKey, ...restValuePath] = valuePath.split('.');
+  const sliderFields = ctx.mainState[mainStateKey === 'liveScene' ? 'liveSliderFields' : 'readySliderFields'];
+  const slider = sliderFields[restValuePath.join('.')];
   if (recentValue != null) {
-    const smoothing = slider?.smoothing || DefaultSmoothing
-    const moveAggression = smoothing <= 0 ? 1 : (1 - smoothing) / 5 + 0.02 // 0.05 is default
-    nextValue = destValue * moveAggression + recentValue * (1 - moveAggression)
+    const smoothing = slider?.smoothing || DefaultSmoothing;
+    const moveAggression = smoothing <= 0 ? 1 : (1 - smoothing) / 5 + 0.02; // 0.05 is default
+    nextValue = destValue * moveAggression + recentValue * (1 - moveAggression);
   }
-  ctx.recentGradientValues[valuePath] = nextValue
-  const lastBounceTime = ctx.bounceTimes[valuePath]
-  const bounceAmount = slider?.bounceAmount || DefaultBounceAmount
-  const bounceDuration = (slider?.bounceDuration || DefaultBounceDuration) * 1000
-  const now = Date.now()
-  const bounceProgress = lastBounceTime ? (now - lastBounceTime) / bounceDuration : 0
+  ctx.recentGradientValues[valuePath] = nextValue;
+  const lastBounceTime = ctx.bounceTimes[valuePath];
+  const bounceAmount = slider?.bounceAmount || DefaultBounceAmount;
+  const bounceDuration = (slider?.bounceDuration || DefaultBounceDuration) * 1000;
+  const now = Date.now();
+  const bounceProgress = lastBounceTime ? (now - lastBounceTime) / bounceDuration : 0;
   // if (lastBounceTime) console.log('lastBounceTime', { valuePath, lastBounceTime, bounceProgress })
   if (bounceProgress > 0 && bounceProgress < 1) {
-    const bounceRatio = getAsymmetricSmoothBounce(bounceProgress)
-    const bounceDeltaValue = bounceAmount * bounceRatio
+    const bounceRatio = getAsymmetricSmoothBounce(bounceProgress);
+    const bounceDeltaValue = bounceAmount * bounceRatio;
     // console.log('bounceProgress', { bounceProgress, bounceAmount, bounceRatio, bounceDeltaValue })
-    nextValue += bounceDeltaValue
+    nextValue += bounceDeltaValue;
   }
-  return nextValue
+  return nextValue;
 }
 
-function colorFrame(media: ColorMedia, ctx: StateContext, mediaPath: string): Frame {
-  const h = applyGradientValue(media.h, `${mediaPath}.h`, ctx)
-  const s = applyGradientValue(media.s, `${mediaPath}.s`, ctx)
-  const l = applyGradientValue(media.l, `${mediaPath}.l`, ctx)
-  return createSolidHSLFrame(egInfo, h, s, l)
+function colorFrame(media: ColorScene, ctx: StateContext, controlPath: string): Frame {
+  const h = applyGradientValue(media.h, `${controlPath}.h`, ctx);
+  const s = applyGradientValue(media.s, `${controlPath}.s`, ctx);
+  const l = applyGradientValue(media.l, `${controlPath}.l`, ctx);
+  return createSolidHSLFrame(egInfo, h, s, l);
 }
 
-function videoFrameBare(media: VideoMedia, ctx: StateContext, mediaPath: string): Frame {
-  const video = ctx.video.getPlayer(media.id)
+function videoFrameBare(media: VideoScene, ctx: StateContext, controlPath: string): Frame {
+  const video = ctx.video.getPlayer(media.id);
   if (media.pauseOnFrame) {
-    return video.readFrame() || blackFrame
+    return video.readFrame() || blackFrame;
   }
-  if (media.params) video.setParams(media.params)
+  if (media.params) video.setParams(media.params);
   if (media.track) {
-    video.selectVideo(media.track)
-    return video.consumeFrame() || blackFrame
+    video.selectVideo(media.track);
+    return video.consumeFrame() || blackFrame;
   }
-  return blackFrame
+  return blackFrame;
 }
 
-function withColorize(
-  frame: Frame,
-  effect: ColorizeEffect,
-  ctx: StateContext,
-  mediaPath: string
-): Frame {
-  const amount = applyGradientValue(effect.amount, `${mediaPath}.amount`, ctx)
-  const hue = applyGradientValue(effect.hue, `${mediaPath}.hue`, ctx)
-  const saturation = applyGradientValue(effect.saturation, `${mediaPath}.saturation`, ctx)
-  return frameColorize(egInfo, frame, amount, hue, saturation)
+function withColorize(frame: Frame, effect: ColorizeEffect, ctx: StateContext, controlPath: string): Frame {
+  const amount = applyGradientValue(effect.amount, `${controlPath}.amount`, ctx);
+  const hue = applyGradientValue(effect.hue, `${controlPath}.hue`, ctx);
+  const saturation = applyGradientValue(effect.saturation, `${controlPath}.saturation`, ctx);
+  return frameColorize(egInfo, frame, amount, hue, saturation);
 }
 
-function withDesaturate(
-  frame: Frame,
-  effect: DesaturateEffect,
-  ctx: StateContext,
-  mediaPath: string
-): Frame {
-  const value = applyGradientValue(effect.value, `${mediaPath}.value`, ctx)
-  return frameDesaturate(egInfo, frame, value)
+function withDesaturate(frame: Frame, effect: DesaturateEffect, ctx: StateContext, controlPath: string): Frame {
+  const value = applyGradientValue(effect.value, `${controlPath}.value`, ctx);
+  return frameDesaturate(egInfo, frame, value);
 }
 
-function withHueShift(
-  frame: Frame,
-  effect: HueShiftEffect,
-  ctx: StateContext,
-  mediaPath: string
-): Frame {
-  const value = applyGradientValue(effect.value, `${mediaPath}.value`, ctx)
-  return frameHueShift(egInfo, frame, value)
+function withHueShift(frame: Frame, effect: HueShiftEffect, ctx: StateContext, controlPath: string): Frame {
+  const value = applyGradientValue(effect.value, `${controlPath}.value`, ctx);
+  return frameHueShift(egInfo, frame, value);
 }
 
-function withRotate(
-  frame: Frame,
-  effect: RotateEffect,
-  ctx: StateContext,
-  mediaPath: string
-): Frame {
-  const value = applyGradientValue(effect.value, `${mediaPath}.value`, ctx)
-  return frameRotate(egInfo, frame, value)
+function withRotate(frame: Frame, effect: RotateEffect, ctx: StateContext, controlPath: string): Frame {
+  const value = applyGradientValue(effect.value, `${controlPath}.value`, ctx);
+  return frameRotate(egInfo, frame, value);
 }
 
-function withInvert(
-  frame: Frame,
-  effect: InvertEffect,
-  ctx: StateContext,
-  mediaPath: string
-): Frame {
-  return frameInvert(egInfo, frame)
+function withInvert(frame: Frame, effect: InvertEffect, ctx: StateContext, controlPath: string): Frame {
+  return frameInvert(egInfo, frame);
 }
 
-function withBrighten(
-  frame: Frame,
-  effect: BrightenEffect,
-  ctx: StateContext,
-  mediaPath: string
-): Frame {
-  const value = applyGradientValue(effect.value, `${mediaPath}.value`, ctx)
-  return frameBrighten(egInfo, frame, value)
+function withBrighten(frame: Frame, effect: BrightenEffect, ctx: StateContext, controlPath: string): Frame {
+  const value = applyGradientValue(effect.value, `${controlPath}.value`, ctx);
+  return frameBrighten(egInfo, frame, value);
 }
 
-function withDarken(
-  frame: Frame,
-  effect: DarkenEffect,
-  ctx: StateContext,
-  mediaPath: string
-): Frame {
-  const value = applyGradientValue(effect.value, `${mediaPath}.value`, ctx)
-  return frameDarken(egInfo, frame, value)
+function withDarken(frame: Frame, effect: DarkenEffect, ctx: StateContext, controlPath: string): Frame {
+  const value = applyGradientValue(effect.value, `${controlPath}.value`, ctx);
+  return frameDarken(egInfo, frame, value);
 }
 
-function withMediaEffect(
-  frame: Frame,
-  effect: Effect,
-  ctx: StateContext,
-  mediaPath: string
-): Frame {
-  if (effect.type === 'colorize') return withColorize(frame, effect, ctx, mediaPath)
-  if (effect.type === 'desaturate') return withDesaturate(frame, effect, ctx, mediaPath)
-  if (effect.type === 'hueShift') return withHueShift(frame, effect, ctx, mediaPath)
-  if (effect.type === 'invert') return withInvert(frame, effect, ctx, mediaPath)
-  if (effect.type === 'brighten') return withBrighten(frame, effect, ctx, mediaPath)
-  if (effect.type === 'darken') return withDarken(frame, effect, ctx, mediaPath)
-  if (effect.type === 'rotate') return withRotate(frame, effect, ctx, mediaPath)
-  return frame
+function withMediaEffect(frame: Frame, effect: Effect, ctx: StateContext, controlPath: string): Frame {
+  if (effect.type === 'colorize') return withColorize(frame, effect, ctx, controlPath);
+  if (effect.type === 'desaturate') return withDesaturate(frame, effect, ctx, controlPath);
+  if (effect.type === 'hueShift') return withHueShift(frame, effect, ctx, controlPath);
+  if (effect.type === 'invert') return withInvert(frame, effect, ctx, controlPath);
+  if (effect.type === 'brighten') return withBrighten(frame, effect, ctx, controlPath);
+  if (effect.type === 'darken') return withDarken(frame, effect, ctx, controlPath);
+  if (effect.type === 'rotate') return withRotate(frame, effect, ctx, controlPath);
+  return frame;
 }
 
-function withMediaEffects(
-  frame: Frame,
-  effects: Effects | undefined,
-  ctx: StateContext,
-  mediaPath: string
-): Frame {
-  let outFrame = frame
+function withMediaEffects(frame: Frame, effects: Effects | undefined, ctx: StateContext, controlPath: string): Frame {
+  let outFrame = frame;
   effects?.forEach((effect) => {
-    outFrame = withMediaEffect(outFrame, effect, ctx, `${mediaPath}.${effect.key}`)
-  })
-  return outFrame
+    outFrame = withMediaEffect(outFrame, effect, ctx, `${controlPath}.${effect.key}`);
+  });
+  return outFrame;
 }
 
-function videoFrame(media: VideoMedia, ctx: StateContext, mediaPath: string): Frame {
-  const frame = videoFrameBare(media, ctx, mediaPath)
-  return withMediaEffects(frame, media.effects, ctx, `${mediaPath}.effects`)
+function videoFrame(media: VideoScene, ctx: StateContext, controlPath: string): Frame {
+  const frame = videoFrameBare(media, ctx, controlPath);
+  return withMediaEffects(frame, media.effects, ctx, `${controlPath}.effects`);
 }
 
-function layerBlend(
-  frameA: Frame,
-  frameB: Frame,
-  blendMode: 'mix' | 'add' | 'mask',
-  blendAmount: number
-): Frame {
-  if (blendMode === 'mix') return frameMix(egInfo, frameA, frameB, blendAmount)
-  if (blendMode === 'add') return frameAdd(egInfo, frameA, frameB, blendAmount)
-  if (blendMode === 'mask') return frameMask(egInfo, frameA, frameB, blendAmount)
-  return frameA
+function layerBlend(frameA: Frame, frameB: Frame, blendMode: 'mix' | 'add' | 'mask', blendAmount: number): Frame {
+  if (blendMode === 'mix') return frameMix(egInfo, frameA, frameB, blendAmount);
+  if (blendMode === 'add') return frameAdd(egInfo, frameA, frameB, blendAmount);
+  if (blendMode === 'mask') return frameMask(egInfo, frameA, frameB, blendAmount);
+  return frameA;
 }
 
-function layersFrame(media: LayersMedia, ctx: StateContext, mediaPath: string): Frame {
-  const reverseLayers = media.layers.slice(0, -1).reverse()
-  const firstLayer = media.layers.at(-1)
-  if (!firstLayer) return blackFrame
-  let frame = mediaFrame(firstLayer.media, ctx, `${mediaPath}.layer.${firstLayer.key}`)
+function layersFrame(media: LayersScene, ctx: StateContext, controlPath: string): Frame {
+  const reverseLayers = media.layers.slice(0, -1).reverse();
+  const firstLayer = media.layers.at(-1);
+  if (!firstLayer) return blackFrame;
+  let frame = mediaFrame(firstLayer.media, ctx, `${controlPath}.layer.${firstLayer.key}`);
   reverseLayers.forEach((layer) => {
-    const layerAmount = applyGradientValue(
-      layer.blendAmount,
-      `${mediaPath}.layer.${layer.key}.blendAmount`,
-      ctx
-    )
+    const layerAmount = applyGradientValue(layer.blendAmount, `${controlPath}.layer.${layer.key}.blendAmount`, ctx);
     frame = layerBlend(
       frame,
-      mediaFrame(layer.media, ctx, `${mediaPath}.layer.${layer.key}`),
+      mediaFrame(layer.media, ctx, `${controlPath}.layer.${layer.key}`),
       layer.blendMode,
       layerAmount
-    )
-  })
-  return frame
+    );
+  });
+  return frame;
 }
 
-export function getSequenceActiveItem(media: SequenceMedia): SequenceItem | undefined {
-  const { sequence, activeKey } = media
-  return sequence.find((media) => media.key === activeKey) || media.sequence[0]
+export function getSequenceActiveItem(media: SequenceScene): SequenceItem | undefined {
+  const { sequence, activeKey } = media;
+  return sequence.find((media) => media.key === activeKey) || media.sequence[0];
 }
 
-function sequenceFrame(media: SequenceMedia, ctx: StateContext, mediaPath: string): Frame {
-  const activeMedia = getSequenceActiveItem(media)
-  const now = ctx.nowTime
+function sequenceFrame(media: SequenceScene, ctx: StateContext, controlPath: string): Frame {
+  const activeMedia = getSequenceActiveItem(media);
+  const now = ctx.nowTime;
   // handle media.transition. and transitionStartTime and transitionEndTime
-  const {
-    transitionStartTime,
-    transitionEndTime,
-    transition: transitionSpec,
-    nextActiveKey,
-  } = media
-  const duration = transitionSpec?.duration || DefaultTransitionDuration
-  if (!activeMedia) return blackFrame
-  const activeMediaKey = `${mediaPath}.item.${activeMedia.key}`
+  const { transitionStartTime, transitionEndTime, transition: transitionSpec, nextActiveKey } = media;
+  const duration = transitionSpec?.duration || DefaultTransitionDuration;
+  if (!activeMedia) return blackFrame;
+  const activeMediaKey = `${controlPath}.item.${activeMedia.key}`;
 
-  const activeMediaFrame = activeMedia && mediaFrame(activeMedia.media, ctx, activeMediaKey)
+  const activeMediaFrame = activeMedia && mediaFrame(activeMedia.media, ctx, activeMediaKey);
   if (!activeMediaFrame) {
-    return blackFrame
+    return blackFrame;
   }
   if (
     transitionSpec &&
@@ -424,70 +353,52 @@ function sequenceFrame(media: SequenceMedia, ctx: StateContext, mediaPath: strin
     // now <= transitionStartTime + duration
   ) {
     // transition in progress
-    const progress = (now - transitionStartTime) / duration
-    const nextItem = media.sequence.find((item) => item.key === nextActiveKey)
-    const nextMedia = nextItem?.media
-    if (!nextMedia) return activeMediaFrame
-    const nextActiveMediaKey = `${mediaPath}.item.${nextActiveKey}`
-    const nextFrame = mediaFrame(nextMedia, ctx, nextActiveMediaKey)
-    if (progress >= 1) return nextFrame
-    return transition(egInfo, activeMediaFrame, nextFrame, transitionSpec, progress)
+    const progress = (now - transitionStartTime) / duration;
+    const nextItem = media.sequence.find((item) => item.key === nextActiveKey);
+    const nextMedia = nextItem?.media;
+    if (!nextMedia) return activeMediaFrame;
+    const nextActiveMediaKey = `${controlPath}.item.${nextActiveKey}`;
+    const nextFrame = mediaFrame(nextMedia, ctx, nextActiveMediaKey);
+    if (progress >= 1) return nextFrame;
+    return transition(egInfo, activeMediaFrame, nextFrame, transitionSpec, progress);
   }
 
-  return mediaFrame(activeMedia.media, ctx, `${mediaPath}.item.${activeMedia.key}`)
+  return mediaFrame(activeMedia.media, ctx, `${controlPath}.item.${activeMedia.key}`);
 }
 
-function mediaFrame(media: Media, ctx: StateContext, mediaPath: string): Frame {
-  if (media.type === 'color') return colorFrame(media, ctx, mediaPath)
-  if (media.type === 'video') return videoFrame(media, ctx, mediaPath)
-  if (media.type === 'layers') return layersFrame(media, ctx, mediaPath)
-  if (media.type === 'sequence') return sequenceFrame(media, ctx, mediaPath)
-  if (media.type === 'off') return blackFrame
-  return blackFrame
+function mediaFrame(media: Media, ctx: StateContext, controlPath: string): Frame {
+  if (media.type === 'color') return colorFrame(media, ctx, controlPath);
+  if (media.type === 'video') return videoFrame(media, ctx, controlPath);
+  if (media.type === 'layers') return layersFrame(media, ctx, controlPath);
+  if (media.type === 'sequence') return sequenceFrame(media, ctx, controlPath);
+  if (media.type === 'off') return blackFrame;
+  return blackFrame;
 }
 
 export function getEGLiveFrame(mainState: MainState, ctx: StateContext, readyFrame: Frame): Frame {
-  const liveFrame = mediaFrame(mainState.liveMedia, ctx, 'liveMedia')
-  const { manual, autoManualStartValue, autoStartTime } = mainState.transitionState
-  const manualGradient =
-    typeof manual === 'number' ? applyGradientValue(manual, 'transitionState.manual', ctx) : null
-  const manualProgress =
-    manualGradient == null || autoManualStartValue != null ? null : manualGradient
-  let transitionProgress = manualProgress
+  const liveFrame = mediaFrame(mainState.liveScene, ctx, 'liveScene');
+  const { manual, autoStartTime } = mainState.transitionState;
+  const manualProgress = typeof manual === 'number' ? applyGradientValue(manual, 'transitionState.manual', ctx) : null;
+  let transitionProgress = manualProgress;
 
   if (autoStartTime && transitionProgress == null) {
-    const timeSinceStart = ctx.nowTime - autoStartTime
-    transitionProgress = Math.min(
-      1,
-      (autoManualStartValue ?? 0) + timeSinceStart / mainState.transition.duration
-    )
+    const timeSinceStart = ctx.nowTime - autoStartTime;
+    transitionProgress = Math.min(1, timeSinceStart / mainState.transition.duration);
   }
 
-  const finalFrame = transition(
-    egInfo,
-    liveFrame,
-    readyFrame,
-    mainState.transition,
-    transitionProgress || 0
-  )
-  return finalFrame
+  const finalFrame = transition(egInfo, liveFrame, readyFrame, mainState.transition, transitionProgress || 0);
+  return finalFrame;
 }
 
-function transition(
-  egInfo: EGInfo,
-  frameA: Frame,
-  frameB: Frame,
-  transition: Transition,
-  progress: number
-): Frame {
-  if (transition.mode === 'mix') return frameMix(egInfo, frameA, frameB, progress)
+function transition(egInfo: EGInfo, frameA: Frame, frameB: Frame, transition: Transition, progress: number): Frame {
+  if (transition.mode === 'mix') return frameMix(egInfo, frameA, frameB, progress);
   if (transition.mode === 'add') {
-    const a = frameDarken(egInfo, frameA, Math.max(0, progress * 2 - 1))
-    return frameAdd(egInfo, a, frameB, Math.min(1, progress * 2))
+    const a = frameDarken(egInfo, frameA, Math.max(0, progress * 2 - 1));
+    return frameAdd(egInfo, a, frameB, Math.min(1, progress * 2));
   }
-  return frameA
+  return frameA;
 }
 
 export function getEGReadyFrame(mainState: MainState, ctx: StateContext): Frame {
-  return mediaFrame(mainState.readyMedia, ctx, 'readyMedia')
+  return mediaFrame(mainState.readyScene, ctx, 'readyScene');
 }

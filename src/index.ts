@@ -34,8 +34,8 @@ import {
   UIContext,
 } from './ui';
 import { models } from './models';
-import { mainState } from './state';
-import { libraryPath, mainStatePath, mediaPath, statePath } from './paths';
+import { mainState, mainStateUpdate } from './state';
+import { libraryPath, mainStatePath, controlPath, statePath } from './paths';
 
 // let mainState: MainState = defaultMainState;
 
@@ -108,7 +108,7 @@ const sacn = egSacnService(egInfo);
 const liveViewServer = createEGViewServer(3889);
 const readyViewServer = createEGViewServer(3888);
 
-const video = egVideo(egInfo, mediaPath, {
+const video = egVideo(egInfo, controlPath, {
   // const video = egVideo(egInfo, process.env.EG_MEDIA_PATH || 'eg-media-2', {
   onPlayerUpdate: () => {
     // updateUI();
@@ -204,21 +204,21 @@ function performMainLoopStep(inMs: number) {
 
 // wsServer.update("startTime", startTime);
 
-// function updateMediaUI(
+// function updateSceneUI(
 //   mediaKey: string,
-//   mediaState: Media,
+//   sceneState: Media,
 //   uiContext: UIContext,
 //   childrenOnly?: boolean
 // ) {
-//   // console.log('updateMediaUI', mediaKey, childrenOnly, mediaState)
+//   // console.log('updateSceneUI', mediaKey, childrenOnly, sceneState)
 //   if (!childrenOnly)
-//     wsServer.update(mediaKey, getMediaUI(mediaKey, mediaState, uiContext));
-//   if (mediaState.type === "video") {
+//     wsServer.update(mediaKey, getMediaUI(mediaKey, sceneState, uiContext));
+//   if (sceneState.type === "video") {
 //     wsServer.update(
 //       `${mediaKey}.effects`,
-//       getEffectsUI(mediaKey, mediaState.effects, uiContext)
+//       getEffectsUI(mediaKey, sceneState.effects, uiContext)
 //     );
-//     mediaState.effects?.forEach((effect) => {
+//     sceneState.effects?.forEach((effect) => {
 //       wsServer.update(
 //         `${mediaKey}.effects.${effect.key}`,
 //         getEffectUI(`${mediaKey}.effects.${effect.key}`, effect, uiContext)
@@ -226,23 +226,23 @@ function performMainLoopStep(inMs: number) {
 //     });
 //     return;
 //   }
-//   if (mediaState.type === "layers") {
-//     mediaState.layers?.forEach((layer) => {
+//   if (sceneState.type === "layers") {
+//     sceneState.layers?.forEach((layer) => {
 //       // console.log('layer UI', layer.key)
 //       const layerKey = `${mediaKey}.layer.${layer.key}`;
 //       wsServer.update(layerKey, getMediaLayerUI(layerKey, layer, uiContext));
-//       updateMediaUI(layerKey, layer.media, uiContext, true);
+//       updateSceneUI(layerKey, layer.media, uiContext, true);
 //     });
 //     return;
 //   }
-//   if (mediaState.type === "sequence") {
-//     mediaState.sequence?.forEach((sequenceItem) => {
+//   if (sceneState.type === "sequence") {
+//     sceneState.sequence?.forEach((sequenceItem) => {
 //       const sequenceItemKey = `${mediaKey}.item.${sequenceItem.key}`;
 //       wsServer.update(
 //         sequenceItemKey,
 //         getMediaSequenceUI(sequenceItemKey, sequenceItem, uiContext)
 //       );
-//       updateMediaUI(sequenceItemKey, sequenceItem.media, uiContext, true);
+//       updateSceneUI(sequenceItemKey, sequenceItem.media, uiContext, true);
 //     });
 //     return;
 //   }
@@ -257,16 +257,16 @@ function performMainLoopStep(inMs: number) {
 //   wsServer.updateRoot(getUIRoot(mainState, uiContext));
 //   wsServer.update(
 //     "liveDashboard",
-//     getDashboardUI(mainState, uiContext, "liveMedia")
+//     getDashboardUI(mainState, uiContext, "liveScene")
 //   );
 //   wsServer.update(
 //     "readyDashboard",
-//     getDashboardUI(mainState, uiContext, "readyMedia")
+//     getDashboardUI(mainState, uiContext, "readyScene")
 //   );
 //   // wsServer.update('quickEffects', getQuickEffects())
 //   // wsServer.update('beatEffects', getBeatEffects(mainState))
-//   updateMediaUI("readyMedia", mainState.readyMedia, uiContext);
-//   updateMediaUI("liveMedia", mainState.liveMedia, uiContext);
+//   updateSceneUI("readyScene", mainState.readyScene, uiContext);
+//   updateSceneUI("liveScene", mainState.liveScene, uiContext);
 // }
 
 // function updateLibraryUI() {
@@ -302,99 +302,94 @@ function performMainLoopStep(inMs: number) {
 //   midiDashboard = getMidiFields(mainState);
 // }
 
-// const sequenceTransitionEnds: Record<string, undefined | NodeJS.Timeout> = {};
-// const sequenceAutoTransitions: Record<string, undefined | NodeJS.Timeout> = {};
-// const sequenceVideoEndTransitions: Record<string, undefined | NodeJS.Timeout> =
-//   {};
+const sequenceTransitionEnds: Record<string, undefined | NodeJS.Timeout> = {};
+const sequenceAutoTransitions: Record<string, undefined | NodeJS.Timeout> = {};
+const sequenceVideoEndTransitions: Record<string, undefined | NodeJS.Timeout> = {};
 
 // let isMidiTouchingManualTransition = false;
 
+let prevState: MainState | null = null;
+
+setInterval(() => {
+  const state = mainState.get();
+  if (!state) return;
+  if (state.transitionState.manual === 1) {
+    mainStateUpdate((state) => ({
+      ...state,
+      readyScene: state.liveScene,
+      liveScene: state.readyScene,
+      transitionState: { manual: null, autoStartTime: null },
+    }));
+  } else if (state.transitionState.autoStartTime) {
+    const timeSinceStart = Date.now() - state.transitionState.autoStartTime;
+    const duration = state.transition.duration;
+    const autoTransitionProgress = timeSinceStart / duration;
+    const destProgress = Math.min(1, autoTransitionProgress);
+    if (destProgress == 1) {
+      mainStateUpdate((state) => ({
+        ...state,
+        readyScene: state.liveScene,
+        liveScene: state.readyScene,
+        liveDashboard: state.readyDashboard,
+        readyDashboard: state.liveDashboard,
+        liveSliderFields: state.readySliderFields,
+        readySliderFields: state.liveSliderFields,
+        transitionState: {
+          manual: null,
+          autoStartTime: null,
+        },
+      }));
+      return;
+    }
+  }
+}, 100);
+
+mainState.subscribe((state) => {
+  if (!state) return;
+
+  // init all video players
+  matchAllScenes(state, (media) => {
+    if (media.type === 'video') {
+      const player = video.getPlayer(media.id);
+      if (media.params) player.setParams(media.params);
+      if (media.track) player.selectVideo(media.track);
+      return true;
+    }
+    return false;
+  });
+
+  // handle auto transitioning with maxDuration
+  matchAllScenes(state, (media, controlPath) => {
+    if (media.type === 'sequence') {
+      const activeItem = getSequenceActiveItem(media);
+      if (!activeItem || !activeItem.maxDuration) {
+        return false;
+      }
+      const controlPathString = controlPath.join('.');
+      clearTimeout(sequenceAutoTransitions[controlPathString]);
+      const maxDurationMs = 1_000 * activeItem.maxDuration;
+      const timeUntilMaxDuration = media.transitionStartTime
+        ? media.transitionStartTime + maxDurationMs - Date.now()
+        : maxDurationMs;
+      sequenceAutoTransitions[controlPathString] = setTimeout(
+        () => {
+          // delete sequenceVideoEndTransitions[controlPathString];
+          delete sequenceAutoTransitions[controlPathString];
+          goNext(controlPath);
+        },
+        Math.max(1, timeUntilMaxDuration)
+      );
+      return true;
+    }
+    return false;
+  });
+  // handleVideoEndBehavior();
+
+  // handleAudioPlayback(state, prevState);
+  prevState = state;
+});
+
 // function mainStateEffect(state: MainState, prevState: MainState) {
-//   setTimeout(() => {
-//     if (state.transitionState.manual === 1) {
-//       // mainStateUpdate((state) => ({
-//       //   ...state,
-//       //   readyMedia: state.liveMedia,
-//       //   liveMedia: state.readyMedia,
-//       //   transitionState: { manual: null, autoStartTime: null },
-//       // }));
-//     } else if (state.transitionState.autoStartTime) {
-//       const manualStartValue = state.transitionState.autoManualStartValue ?? 0;
-//       const timeSinceStart = Date.now() - state.transitionState.autoStartTime;
-//       const duration = state.transition.duration;
-
-//       const autoTransitionProgress = timeSinceStart / duration;
-//       const destProgress = Math.min(
-//         1,
-//         autoTransitionProgress + manualStartValue
-//       );
-//       if (destProgress == 1) {
-//         isMidiTouchingManualTransition = false;
-//         delete recentGradientValues["transitionState.manual"];
-//         mainStateUpdate((state) => ({
-//           ...state,
-//           readyMedia: state.liveMedia,
-//           liveMedia: state.readyMedia,
-//           liveDashboard: state.readyDashboard,
-//           readyDashboard: state.liveDashboard,
-//           liveSliderFields: state.readySliderFields,
-//           readySliderFields: state.liveSliderFields,
-//           transitionState: {
-//             manual: null,
-//             autoStartTime: null,
-//             autoManualStartValue: null,
-//           },
-//         }));
-//         return;
-//       }
-//       isMidiTouchingManualTransition = false;
-//       delete recentGradientValues["transitionState.manual"];
-//       mainStateUpdate((state) => ({
-//         ...state,
-//         transitionState: { ...state.transitionState, manual: destProgress },
-//       }));
-//     }
-//   }, 150);
-
-//   // init all video players
-//   matchAllMedia(state, (media) => {
-//     if (media.type === "video") {
-//       const player = video.getPlayer(media.id);
-//       if (media.params) player.setParams(media.params);
-//       if (media.track) player.selectVideo(media.track);
-//       return true;
-//     }
-//     return false;
-//   });
-
-//   // handle auto transitioning with maxDuration
-//   matchAllMedia(state, (media, mediaPath) => {
-//     if (media.type === "sequence") {
-//       const activeItem = getSequenceActiveItem(media);
-//       if (!activeItem || !activeItem.maxDuration) {
-//         return false;
-//       }
-//       const mediaPathString = mediaPath.join(".");
-//       clearTimeout(sequenceAutoTransitions[mediaPathString]);
-//       const maxDurationMs = 1_000 * activeItem.maxDuration;
-//       const timeUntilMaxDuration = media.transitionStartTime
-//         ? media.transitionStartTime + maxDurationMs - Date.now()
-//         : maxDurationMs;
-//       sequenceAutoTransitions[mediaPathString] = setTimeout(
-//         () => {
-//           delete sequenceVideoEndTransitions[mediaPathString];
-//           delete sequenceAutoTransitions[mediaPathString];
-//           goNext(mediaPath);
-//         },
-//         Math.max(1, timeUntilMaxDuration)
-//       );
-//       return true;
-//     }
-//     return false;
-//   });
-//   handleVideoEndBehavior();
-
-//   handleAudioPlayback(state, prevState);
 // }
 
 // const audioPlayers: Record<string, AudioPlayer> = {};
@@ -415,7 +410,7 @@ function performMainLoopStep(inMs: number) {
 //     (prevVideoNode) =>
 //       !videoNodes.some((videoNode) => prevVideoNode[1].id === videoNode[1].id)
 //   );
-//   videoNodesToStart.forEach(([mediaPath, media]) => {
+//   videoNodesToStart.forEach(([controlPath, media]) => {
 //     if (media.type !== "video") return;
 //     const player = video.getPlayer(media.id);
 //     if (!player) return;
@@ -424,14 +419,14 @@ function performMainLoopStep(inMs: number) {
 //       if (!info?.audioFile) return;
 //       if (!audioPlayers[media.id]) {
 //         audioPlayers[media.id] = playAudio(
-//           join(mediaPath, info.audioFile)
+//           join(controlPath, info.audioFile)
 //         );
 //       }
 //     }, 20);
 //     console.log("starting audio", player.getInfo());
 //   });
 
-//   videoNodesToStop.forEach(([mediaPath, media]) => {
+//   videoNodesToStop.forEach(([controlPath, media]) => {
 //     if (media.type !== "video") return;
 //     const audioPlayer = audioPlayers[media.id];
 //     if (!audioPlayer) return;
@@ -442,67 +437,69 @@ function performMainLoopStep(inMs: number) {
 //   // console.log('videoNodesToStop', videoNodesToStop)
 // }
 
-// function handleVideoEndBehavior() {
-//   matchAllMedia(mainState, (media, mediaPath) => {
-//     if (media.type !== "sequence") return false;
-//     const mediaPathString = mediaPath.join(".");
-//     const activeItem = getSequenceActiveItem(media);
-//     if (!activeItem) return false;
-//     if (activeItem.media.type !== "video") return false;
-//     if (!activeItem.goOnVideoEnd) return false;
-//     const player = video.getPlayer(activeItem.media.id);
-//     if (!player) return false;
-//     const playingFrame = player.getPlayingFrame();
-//     const frameCount = player.getFrameCount();
-//     if (playingFrame === null || frameCount === null) return false;
-//     const framesRemaining = frameCount - playingFrame;
-//     const approxTimeRemaining = (1000 * framesRemaining) / mainAnimationFPS;
-//     clearTimeout(sequenceVideoEndTransitions[mediaPathString]);
-//     sequenceVideoEndTransitions[mediaPathString] = setTimeout(
-//       () => {
-//         // console.log('video ended. going next.')
-//         delete sequenceVideoEndTransitions[mediaPathString];
-//         delete sequenceAutoTransitions[mediaPathString];
-//         goNext(mediaPath);
-//       },
-//       Math.max(1, approxTimeRemaining)
-//     );
-//   });
-//   matchAllMedia(mainState, (media, mediaPath) => {
-//     if (media.type !== "sequence") return false;
-//     const mediaPathString = mediaPath.join(".");
-//     const { transitionEndTime, transition } = media;
-//     if (transitionEndTime && transition) {
-//       // handle video transition ending
-//       clearTimeout(sequenceTransitionEnds[mediaPathString]);
-//       const now = Date.now();
-//       const timeRemaining = transitionEndTime - now;
-//       // const progress = 1 - timeRemaining / transition.duration // actually wedont need this
-//       sequenceTransitionEnds[mediaPathString] = setTimeout(
-//         () => {
-//           delete sequenceTransitionEnds[mediaPathString];
-//           rootMediaUpdate(mediaPathString.split("."), (media: Media): Media => {
-//             if (media.type !== "sequence") return media;
-//             const { nextActiveKey } = media;
-//             if (!nextActiveKey) return media;
-//             return {
-//               ...media,
-//               transitionEndTime: undefined,
-//               transitionStartTime: undefined,
-//               activeKey: nextActiveKey,
-//               nextActiveKey: undefined,
-//             };
-//           });
-//           // goNext(mediaPath)
-//         },
-//         Math.max(1, timeRemaining)
-//       );
-//       // console.log('player', approxTimeRemaining)
-//       return true;
-//     }
-//     return false;
-//   });
-// }
+function handleVideoEndBehavior() {
+  const state = mainState.get();
+  if (!state) return;
+  matchAllScenes(state, (scene, controlPath) => {
+    if (scene.type !== 'sequence') return false;
+    const controlPathString = controlPath.join('.');
+    const activeItem = getSequenceActiveItem(scene);
+    if (!activeItem) return false;
+    if (activeItem.scene.type !== 'video') return false;
+    if (!activeItem.goOnVideoEnd) return false;
+    const player = video.getPlayer(activeItem.scene.id);
+    if (!player) return false;
+    const playingFrame = player.getPlayingFrame();
+    const frameCount = player.getFrameCount();
+    if (playingFrame === null || frameCount === null) return false;
+    const framesRemaining = frameCount - playingFrame;
+    const approxTimeRemaining = (1000 * framesRemaining) / mainAnimationFPS;
+    clearTimeout(sequenceVideoEndTransitions[controlPathString]);
+    sequenceVideoEndTransitions[controlPathString] = setTimeout(
+      () => {
+        // console.log('video ended. going next.')
+        delete sequenceVideoEndTransitions[controlPathString];
+        delete sequenceAutoTransitions[controlPathString];
+        goNext(controlPath);
+      },
+      Math.max(1, approxTimeRemaining)
+    );
+  });
+  matchAllScenes(mainState, (scene, controlPath) => {
+    if (scene.type !== 'sequence') return false;
+    const controlPathString = controlPath.join('.');
+    const { transitionEndTime, transition } = scene;
+    if (transitionEndTime && transition) {
+      // handle video transition ending
+      clearTimeout(sequenceTransitionEnds[controlPathString]);
+      const now = Date.now();
+      const timeRemaining = transitionEndTime - now;
+      // const progress = 1 - timeRemaining / transition.duration // actually wedont need this
+      sequenceTransitionEnds[controlPathString] = setTimeout(
+        () => {
+          delete sequenceTransitionEnds[controlPathString];
+          rootMediaUpdate(controlPathString.split('.'), (media: Media): Media => {
+            if (media.type !== 'sequence') return media;
+            const { nextActiveKey } = media;
+            if (!nextActiveKey) return media;
+            return {
+              ...media,
+              transitionEndTime: undefined,
+              transitionStartTime: undefined,
+              activeKey: nextActiveKey,
+              nextActiveKey: undefined,
+            };
+          });
+          // goNext(controlPath)
+        },
+        Math.max(1, timeRemaining)
+      );
+      // console.log('player', approxTimeRemaining)
+      return true;
+    }
+    return false;
+  });
+}
 
 // setInterval(() => {
 //   handleVideoEndBehavior();
@@ -520,8 +517,8 @@ function fetchMedia(media: Media, path: string[]): [string[], Media][] {
   return [[path, media]];
 }
 
-function fetchAllMedia(state: MainState): [string[], Media][] {
-  return [...fetchMedia(state.liveMedia, ['liveMedia']), ...fetchMedia(state.readyMedia, ['readyMedia'])];
+function fetchAllScenes(state: MainState): [string[], Media][] {
+  return [...fetchMedia(state.liveScene, ['liveScene']), ...fetchMedia(state.readyScene, ['readyScene'])];
 }
 
 function fetchActiveMedia(media: Media, path: string[]): [string[], Media][] {
@@ -541,7 +538,7 @@ function fetchActiveMedia(media: Media, path: string[]): [string[], Media][] {
 }
 
 function fetchAllActiveMedia(state: MainState): [string[], Media][] {
-  return [...fetchActiveMedia(state.liveMedia, ['liveMedia']), ...fetchActiveMedia(state.readyMedia, ['readyMedia'])];
+  return [...fetchActiveMedia(state.liveScene, ['liveScene']), ...fetchActiveMedia(state.readyScene, ['readyScene'])];
 }
 
 function getMediaCrawl(media: Media, path: string[]): Media | undefined {
@@ -562,24 +559,27 @@ function getMediaCrawl(media: Media, path: string[]): Media | undefined {
 }
 function getMedia(state: MainState, path: string[]): Media | undefined {
   const [firstKey, ...restPath] = path;
-  if (firstKey === 'liveMedia') return getMediaCrawl(state.liveMedia, restPath);
-  if (firstKey === 'readyMedia') return getMediaCrawl(state.readyMedia, restPath);
+  if (firstKey === 'liveScene') return getMediaCrawl(state.liveScene, restPath);
+  if (firstKey === 'readyScene') return getMediaCrawl(state.readyScene, restPath);
   return undefined;
 }
 
-function matchAllMedia(state: MainState, filter: (media: Media, mediaPath: string[]) => boolean): [string[], Media][] {
-  const allMedia = fetchAllMedia(state);
-  return allMedia.filter(([mediaPath, media]) => filter(media, mediaPath));
+function matchAllScenes(
+  state: MainState,
+  filter: (media: Media, controlPath: string[]) => boolean
+): [string[], Media][] {
+  const allMedia = fetchAllScenes(state);
+  return allMedia.filter(([controlPath, media]) => filter(media, controlPath));
 }
 
 function matchActiveMedia(
   state: MainState,
-  filter: (media: Media, mediaPath: string[]) => boolean
+  filter: (media: Media, controlPath: string[]) => boolean
 ): [string[], Media][] {
   const allMedia = fetchAllActiveMedia(state);
-  return allMedia.filter(([mediaPath, media]) => {
-    if (mediaPath[0] === 'liveMedia') {
-      return filter(media, mediaPath);
+  return allMedia.filter(([controlPath, media]) => {
+    if (controlPath[0] === 'liveScene') {
+      return filter(media, controlPath);
     }
     return false;
   });
@@ -680,7 +680,7 @@ function matchActiveMedia(
 //     console.log("removing", rootMediaKey, item);
 //     mainStateUpdate((state) => {
 //       const dashboardKey =
-//         rootMediaKey === "liveMedia" ? "liveDashboard" : "readyDashboard";
+//         rootMediaKey === "liveScene" ? "liveDashboard" : "readyDashboard";
 //       return {
 //         ...state,
 //         [dashboardKey]: state[dashboardKey].filter((i) => i.key !== item),
@@ -692,13 +692,13 @@ function matchActiveMedia(
 // }
 
 // function updateSliderField(
-//   mainStateKey: "liveMedia" | "readyMedia",
+//   mainStateKey: "liveScene" | "readyScene",
 //   sliderPath: string,
 //   updater: (state: SliderField | undefined) => SliderField
 // ) {
 //   mainStateUpdate((state) => {
 //     const slidersKey =
-//       mainStateKey === "liveMedia" ? "liveSliderFields" : "readySliderFields";
+//       mainStateKey === "liveScene" ? "liveSliderFields" : "readySliderFields";
 //     const sliders = state[slidersKey];
 //     return {
 //       ...state,
@@ -719,7 +719,7 @@ function matchActiveMedia(
 //   const key = action?.[1];
 //   const field = action?.[2];
 //   const [mainStateKey, ...restKey] = key.split(".") as [
-//     "liveMedia" | "readyMedia",
+//     "liveScene" | "readyScene",
 //     string[],
 //   ];
 //   const sliderKey = restKey.join(".");
@@ -835,10 +835,10 @@ function matchActiveMedia(
 // function updateSliderValue(fieldPath: string, value: number) {
 //   console.log("update slider", fieldPath, value);
 //   const [rootMediaKey, ...restFieldPath] = fieldPath.split(".");
-//   if (rootMediaKey !== "liveMedia" && rootMediaKey !== "readyMedia") return;
+//   if (rootMediaKey !== "liveScene" && rootMediaKey !== "readyScene") return;
 //   mainStateUpdate((state) => {
 //     const media =
-//       rootMediaKey === "liveMedia" ? state.liveMedia : state.readyMedia;
+//       rootMediaKey === "liveScene" ? state.liveScene : state.readyScene;
 //     return {
 //       ...state,
 //       [rootMediaKey]: mediaSliderUpdate(restFieldPath, media, value),
@@ -856,12 +856,12 @@ function matchActiveMedia(
 //   }
 // ) {
 //   console.log("add to dash", mediaKey, behavior, opts);
-//   const mediaPath = mediaKey.split(".");
-//   const [rootMediaKey, ...restMediaPath] = mediaPath;
-//   if (rootMediaKey === "liveMedia" || rootMediaKey === "readyMedia") {
+//   const controlPath = mediaKey.split(".");
+//   const [rootMediaKey, ...restMediaPath] = controlPath;
+//   if (rootMediaKey === "liveScene" || rootMediaKey === "readyScene") {
 //     mainStateUpdate((state) => {
 //       const dashboardKey =
-//         rootMediaKey === "liveMedia" ? "liveDashboard" : "readyDashboard";
+//         rootMediaKey === "liveScene" ? "liveDashboard" : "readyDashboard";
 //       const prevDashboard = state[dashboardKey];
 //       return {
 //         ...state,
@@ -897,19 +897,19 @@ function matchActiveMedia(
 //   const fullEffectPath = action?.[1].split(".");
 //   const effectField = action?.[2];
 
-//   const mediaPath = fullEffectPath.slice(0, -2);
+//   const controlPath = fullEffectPath.slice(0, -2);
 //   if (fullEffectPath.at(-2) !== "effects") {
 //     console.warn("Invalid effect path");
 //     return false;
 //   }
 //   const effectKey = fullEffectPath.at(-1);
 
-//   if (!mediaPath || !effectKey || !effectField) {
+//   if (!controlPath || !effectKey || !effectField) {
 //     console.warn("Invalid effect event", event);
 //     return false;
 //   }
 
-//   rootMediaUpdate(mediaPath, (media): Media => {
+//   rootMediaUpdate(controlPath, (media): Media => {
 //     if (media.type !== "video" || !media.effects) {
 //       return media;
 //     }
@@ -951,7 +951,6 @@ function matchActiveMedia(
 //     transitionState: {
 //       ...state.transitionState,
 //       autoStartTime: Date.now(),
-//       autoManualStartValue: state.transitionState.manual ?? 0,
 //     },
 //   }));
 // }
@@ -1006,12 +1005,12 @@ function matchActiveMedia(
 // }
 
 // function mediaUpdate(
-//   mediaPath: string[],
+//   controlPath: string[],
 //   prevMedia: Media,
 //   updater: (media: Media) => Media
 // ): Media {
-//   if (mediaPath.length === 0) return updater(prevMedia);
-//   const [subMediaKey, ...restMediaPath] = mediaPath;
+//   if (controlPath.length === 0) return updater(prevMedia);
+//   const [subMediaKey, ...restMediaPath] = controlPath;
 //   if (subMediaKey === "layer" && prevMedia.type === "layers") {
 //     const [layerKey, ...subMediaPath] = restMediaPath;
 //     return {
@@ -1049,11 +1048,11 @@ function matchActiveMedia(
 // }
 
 // function rootMediaUpdate(
-//   mediaPath: string[],
+//   controlPath: string[],
 //   updater: (media: Media) => Media
 // ) {
-//   const [rootMediaKey, ...restMediaPath] = mediaPath;
-//   if (rootMediaKey !== "liveMedia" && rootMediaKey !== "readyMedia") {
+//   const [rootMediaKey, ...restMediaPath] = controlPath;
+//   if (rootMediaKey !== "liveScene" && rootMediaKey !== "readyScene") {
 //     throw new Error("Invalid root media key");
 //   }
 //   mainStateUpdate((state) => {
@@ -1079,7 +1078,7 @@ function matchActiveMedia(
 //     }
 //     mainStateUpdate((mainState) => ({
 //       ...mainState,
-//       readyMedia: libraryItem.media,
+//       readyScene: libraryItem.media,
 //       readyDashboard: libraryItem.dashboard,
 //       readySliderFields: libraryItem.sliders,
 //     }));
@@ -1094,12 +1093,12 @@ function matchActiveMedia(
 
 // function getMediaSliders(
 //   state: MainState,
-//   mediaPath: string[]
+//   controlPath: string[]
 // ): Record<string, SliderField> | null {
-//   if (mediaPath.length === 1 && mediaPath[0] === "liveMedia") {
+//   if (controlPath.length === 1 && controlPath[0] === "liveScene") {
 //     return state.liveSliderFields;
 //   }
-//   if (mediaPath.length === 1 && mediaPath[0] === "readyMedia") {
+//   if (controlPath.length === 1 && controlPath[0] === "readyScene") {
 //     return state.readySliderFields;
 //   }
 //   return null;
@@ -1107,12 +1106,12 @@ function matchActiveMedia(
 
 // function getMediaDashboard(
 //   state: MainState,
-//   mediaPath: string[]
+//   controlPath: string[]
 // ): DashboardItem[] | null {
-//   if (mediaPath.length === 1 && mediaPath[0] === "liveMedia") {
+//   if (controlPath.length === 1 && controlPath[0] === "liveScene") {
 //     return state.liveDashboard;
 //   }
-//   if (mediaPath.length === 1 && mediaPath[0] === "readyMedia") {
+//   if (controlPath.length === 1 && controlPath[0] === "readyScene") {
 //     return state.readyDashboard;
 //   }
 //   return null;
@@ -1123,44 +1122,44 @@ function matchActiveMedia(
 //     return false;
 //   }
 
-//   const mediaPath = event.dataState.action?.[1]?.split(".");
+//   const controlPath = event.dataState.action?.[1]?.split(".");
 //   const action = event.dataState.action?.[2];
-//   if (!mediaPath || !action) {
+//   if (!controlPath || !action) {
 //     console.warn("Invalid media event", event);
 //     return false;
 //   }
 //   if (action === "saveMedia") {
-//     const mediaValue = getMedia(mainState, mediaPath);
+//     const mediaValue = getMedia(mainState, controlPath);
 //     if (!mediaValue) return true;
 //     const key = `${getMediaTitle(mediaValue, uiContext)} - ${new Date().toLocaleString()}`;
 //     saveMedia(key, {
 //       media: mediaValue,
-//       sliders: getMediaSliders(mainState, mediaPath),
-//       dashboard: getMediaDashboard(mainState, mediaPath),
+//       sliders: getMediaSliders(mainState, controlPath),
+//       dashboard: getMediaDashboard(mainState, controlPath),
 //     });
 //     return true;
 //   }
 //   if (action === "metadata") {
-//     rootMediaUpdate(mediaPath, (media) => ({
+//     rootMediaUpdate(controlPath, (media) => ({
 //       ...media,
 //       label: event.payload.label,
 //     }));
 //     return true;
 //   }
 //   if (action === "clear") {
-//     rootMediaUpdate(mediaPath, () => createBlankMedia("off"));
+//     rootMediaUpdate(controlPath, () => createBlankMedia("off"));
 //     return true;
 //   }
 //   if (action === "mode") {
 //     const mode = event.payload;
-//     rootMediaUpdate(mediaPath, () => createBlankMedia(mode));
+//     rootMediaUpdate(controlPath, () => createBlankMedia(mode));
 //     return true;
 //   }
 //   if (action === "color") {
 //     const colorField = event.dataState.action?.[3];
 //     const number = event.payload[0];
 //     if (colorField === "h" || colorField === "s" || colorField === "l") {
-//       rootMediaUpdate(mediaPath, (media) => ({
+//       rootMediaUpdate(controlPath, (media) => ({
 //         ...media,
 //         [colorField]: number,
 //       }));
@@ -1169,11 +1168,11 @@ function matchActiveMedia(
 //   }
 //   if (action === "track") {
 //     const track = event.payload;
-//     rootMediaUpdate(mediaPath, (media) => ({ ...media, track }));
+//     rootMediaUpdate(controlPath, (media) => ({ ...media, track }));
 //     return true;
 //   }
 //   if (action === "restart") {
-//     const media = getMedia(mainState, mediaPath);
+//     const media = getMedia(mainState, controlPath);
 //     if (media?.type === "video") {
 //       const player = video.getPlayer(media.id);
 //       if (player) {
@@ -1183,7 +1182,7 @@ function matchActiveMedia(
 //     return true;
 //   }
 //   if (action === "pause") {
-//     rootMediaUpdate(mediaPath, (media) => {
+//     rootMediaUpdate(controlPath, (media) => {
 //       if (media.type !== "video") {
 //         console.warn("pause on non-video media", media);
 //         return media;
@@ -1200,7 +1199,7 @@ function matchActiveMedia(
 //     return true;
 //   }
 //   if (action === "play") {
-//     rootMediaUpdate(mediaPath, (media) => {
+//     rootMediaUpdate(controlPath, (media) => {
 //       if (media.type !== "video") {
 //         console.warn("play on non-video media", media);
 //         return media;
@@ -1211,7 +1210,7 @@ function matchActiveMedia(
 //   }
 //   if (action === "loopBounce") {
 //     const loopBounce = event.payload;
-//     rootMediaUpdate(mediaPath, (media) => {
+//     rootMediaUpdate(controlPath, (media) => {
 //       if (media.type !== "video") {
 //         console.warn("loopBounce on non-video media", media);
 //         return media;
@@ -1228,7 +1227,7 @@ function matchActiveMedia(
 //   }
 //   if (action === "reverse") {
 //     const reverse = event.payload;
-//     rootMediaUpdate(mediaPath, (media) => {
+//     rootMediaUpdate(controlPath, (media) => {
 //       if (media.type !== "video") {
 //         console.warn("reverse on non-video media", media);
 //         return media;
@@ -1246,7 +1245,7 @@ function matchActiveMedia(
 //   if (action === "addEffect") {
 //     const effectType = event.payload;
 //     const newEffect: Effect = createBlankEffect(effectType);
-//     rootMediaUpdate(mediaPath, (media) => {
+//     rootMediaUpdate(controlPath, (media) => {
 //       if (media.type !== "video") {
 //         console.warn("addEffect on non-video media", media);
 //         return media;
@@ -1259,7 +1258,7 @@ function matchActiveMedia(
 //     return true;
 //   }
 //   if (action === "effectOrder") {
-//     rootMediaUpdate(mediaPath, (media) => {
+//     rootMediaUpdate(controlPath, (media) => {
 //       if (media.type !== "video") {
 //         console.warn("effectOrder on non-video media", media);
 //         return media;
@@ -1277,7 +1276,7 @@ function matchActiveMedia(
 //   }
 //   if (action === "addLayer") {
 //     const mediaType = event.payload;
-//     rootMediaUpdate(mediaPath, (media) => {
+//     rootMediaUpdate(controlPath, (media) => {
 //       if (media.type !== "layers") {
 //         console.warn("addLayer on non-layer media", media);
 //         return media;
@@ -1299,7 +1298,7 @@ function matchActiveMedia(
 //   }
 //   if (action === "addToSequence") {
 //     const mediaType = event.payload;
-//     rootMediaUpdate(mediaPath, (media) => {
+//     rootMediaUpdate(controlPath, (media) => {
 //       if (media.type !== "sequence") {
 //         console.warn("addToSequence on non-sequence media", media);
 //         return media;
@@ -1318,19 +1317,19 @@ function matchActiveMedia(
 //     return true;
 //   }
 //   if (action === "saveGoNextToDash") {
-//     const mediaKey = mediaPath.join(".");
+//     const mediaKey = controlPath.join(".");
 //     addToDashboard(mediaKey, "goNextButton");
 //     return true;
 //   }
 //   if (action === "addToSequenceFromLibrary") {
 //     const libraryKey = event.payload;
 //     console.log("adding to sequence", libraryKey);
-//     rootMediaUpdate(mediaPath, (media) => {
+//     rootMediaUpdate(controlPath, (media) => {
 //       return media;
 //     });
 //   }
 //   if (action === "transitionDuration") {
-//     rootMediaUpdate(mediaPath, (media) => {
+//     rootMediaUpdate(controlPath, (media) => {
 //       if (media.type !== "sequence") {
 //         console.warn("addToSequence on non-sequence media", media);
 //         return media;
@@ -1348,14 +1347,14 @@ function matchActiveMedia(
 //   }
 
 //   if (action === "goNext") {
-//     console.log("going next", mediaPath);
-//     goNext(mediaPath);
+//     console.log("going next", controlPath);
+//     goNext(controlPath);
 //     return true;
 //   }
 //   if (action === "blendMode") {
-//     const layerKey = mediaPath.at(-1);
+//     const layerKey = controlPath.at(-1);
 //     const blendMode = event.payload;
-//     const targetPath = mediaPath.slice(0, -2);
+//     const targetPath = controlPath.slice(0, -2);
 //     rootMediaUpdate(targetPath, (media) => {
 //       if (media.type !== "layers") {
 //         console.warn("blendMode on non-layer media", media);
@@ -1374,9 +1373,9 @@ function matchActiveMedia(
 //     return true;
 //   }
 //   if (action === "blendAmount") {
-//     const layerKey = mediaPath.at(-1);
+//     const layerKey = controlPath.at(-1);
 //     const blendAmount = event.payload[0];
-//     const targetPath = mediaPath.slice(0, -2);
+//     const targetPath = controlPath.slice(0, -2);
 //     rootMediaUpdate(targetPath, (media) => {
 //       if (media.type !== "layers") {
 //         console.warn("blendMode on non-layer media", media);
@@ -1396,7 +1395,7 @@ function matchActiveMedia(
 //   }
 //   if (action === "sequenceOrder") {
 //     const order = event.payload;
-//     rootMediaUpdate(mediaPath, (media) => {
+//     rootMediaUpdate(controlPath, (media) => {
 //       if (media.type !== "sequence") return media;
 //       return {
 //         ...media,
@@ -1411,7 +1410,7 @@ function matchActiveMedia(
 //   }
 //   if (action === "layerOrder") {
 //     const order = event.payload;
-//     rootMediaUpdate(mediaPath, (media) => {
+//     rootMediaUpdate(controlPath, (media) => {
 //       if (media.type !== "layers") return media;
 //       return {
 //         ...media,
@@ -1425,7 +1424,7 @@ function matchActiveMedia(
 //     return true;
 //   }
 //   if (action === "removeLayer") {
-//     const targetPath = mediaPath.slice(0, -2);
+//     const targetPath = controlPath.slice(0, -2);
 //     const layerKey = event.dataState.action.at(-1);
 //     rootMediaUpdate(targetPath, (media) => {
 //       if (media.type !== "layers") return media;
@@ -1437,7 +1436,7 @@ function matchActiveMedia(
 //     return true;
 //   }
 //   if (action === "removeItem") {
-//     const targetPath = mediaPath.slice(0, -2);
+//     const targetPath = controlPath.slice(0, -2);
 //     const itemKey = event.dataState.action.at(-1);
 //     rootMediaUpdate(targetPath, (media) => {
 //       if (media.type !== "sequence") return media;
@@ -1454,8 +1453,8 @@ function matchActiveMedia(
 //     if (event.dataState.action?.[3]) duration = event.dataState.action?.[3]; // hardcoded events
 //     if (event.payload === true) duration = 10;
 //     if (event.payload === false) duration = null;
-//     const targetPath = mediaPath.slice(0, -2);
-//     const itemKey = mediaPath.at(-1);
+//     const targetPath = controlPath.slice(0, -2);
+//     const itemKey = controlPath.at(-1);
 //     rootMediaUpdate(targetPath, (media) => {
 //       if (media.type !== "sequence") return media;
 //       return {
@@ -1471,8 +1470,8 @@ function matchActiveMedia(
 //     return true;
 //   }
 //   if (action === "goOnVideoEnd") {
-//     const targetPath = mediaPath.slice(0, -2);
-//     const itemKey = mediaPath.at(-1);
+//     const targetPath = controlPath.slice(0, -2);
+//     const itemKey = controlPath.at(-1);
 //     rootMediaUpdate(targetPath, (media) => {
 //       if (media.type !== "sequence") return media;
 //       return {
@@ -1491,44 +1490,44 @@ function matchActiveMedia(
 //   return false;
 // }
 
-// function goNext(mediaPath: string[]) {
-//   rootMediaUpdate(mediaPath, (media) => {
-//     if (media.type !== "sequence") {
-//       console.warn("goNext on non-sequence media", media);
-//       return media;
-//     }
-//     if (!media.sequence.length) return media;
-//     const active = getSequenceActiveItem(media);
-//     if (!active) {
-//       console.warn("goNext: active media not identified");
-//       return media;
-//     }
-//     const activeIndex = media.sequence.findIndex(
-//       (item) => item.key === active.key
-//     );
-//     if (activeIndex === -1) {
-//       console.warn("goNext: active media not found in sequence");
-//       return media;
-//     }
-//     const nextIndex = (activeIndex + 1) % media.sequence.length;
-//     const nextKey = media.sequence[nextIndex]?.key;
-//     if (!nextKey) {
-//       console.warn("goNext: next media not identified");
-//       return media;
-//     }
-//     let transitionDuration = 0;
-//     if (media.transition?.duration) {
-//       transitionDuration = media.transition.duration;
-//     }
-//     const now = Date.now();
-//     return {
-//       ...media,
-//       nextActiveKey: nextKey,
-//       transitionEndTime: now + transitionDuration,
-//       transitionStartTime: now,
-//     };
-//   });
-// }
+function goNext(controlPath: string[]) {
+  // rootMediaUpdate(controlPath, (media) => {
+  //   if (media.type !== "sequence") {
+  //     console.warn("goNext on non-sequence media", media);
+  //     return media;
+  //   }
+  //   if (!media.sequence.length) return media;
+  //   const active = getSequenceActiveItem(media);
+  //   if (!active) {
+  //     console.warn("goNext: active media not identified");
+  //     return media;
+  //   }
+  //   const activeIndex = media.sequence.findIndex(
+  //     (item) => item.key === active.key
+  //   );
+  //   if (activeIndex === -1) {
+  //     console.warn("goNext: active media not found in sequence");
+  //     return media;
+  //   }
+  //   const nextIndex = (activeIndex + 1) % media.sequence.length;
+  //   const nextKey = media.sequence[nextIndex]?.key;
+  //   if (!nextKey) {
+  //     console.warn("goNext: next media not identified");
+  //     return media;
+  //   }
+  //   let transitionDuration = 0;
+  //   if (media.transition?.duration) {
+  //     transitionDuration = media.transition.duration;
+  //   }
+  //   const now = Date.now();
+  //   return {
+  //     ...media,
+  //     nextActiveKey: nextKey,
+  //     transitionEndTime: now + transitionDuration,
+  //     transitionStartTime: now,
+  //   };
+  // });
+}
 
 // const SliderGrabDelta = 0.01;
 

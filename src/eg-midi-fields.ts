@@ -1,12 +1,12 @@
-import { Dashboard, MainState } from './state-schema'
+import { Dashboard, MainState } from './state-schema';
 
 export type MidiField = {
-  key: string
-  behavior: 'bounceButton' | 'goNextButton' | 'slider'
-  field: string
-  min?: number
-  max?: number
-}
+  key: string;
+  behavior: 'bounceButton' | 'goNextButton' | 'slider';
+  field: string;
+  min?: number;
+  max?: number;
+};
 
 // export function getMidiFields(state: MainState) {
 //   const readySliders: MidiField[] = []
@@ -15,17 +15,17 @@ export type MidiField = {
 //   const liveButtons: MidiField[] = []
 //   state.liveDashboard.forEach((item) => {
 //     if (item.behavior === 'slider') {
-//       liveSliders.push({ behavior: 'slider', field: `liveMedia.${item.field}` })
+//       liveSliders.push({ behavior: 'slider', field: `liveScene.${item.field}` })
 //     }
 //     if (item.behavior === 'bounceButton') {
-//       liveButtons.push({ behavior: 'bounceButton', field: `liveMedia.${item.field}` })
+//       liveButtons.push({ behavior: 'bounceButton', field: `liveScene.${item.field}` })
 //     }
 //   })
 //   state.readyDashboard.forEach((item) => {
 //     if (item.behavior === 'slider') {
 //       readySliders.push({
 //         behavior: 'slider',
-//         field: `readyMedia.${item.field}`,
+//         field: `readyScene.${item.field}`,
 //         min: item.min,
 //         max: item.max,
 //       })
@@ -33,7 +33,7 @@ export type MidiField = {
 //     if (item.behavior === 'bounceButton') {
 //       readyButtons.push({
 //         behavior: 'bounceButton',
-//         field: `readyMedia.${item.field}`,
+//         field: `readyScene.${item.field}`,
 //         min: item.min,
 //         max: item.max,
 //       })
@@ -48,35 +48,35 @@ export type MidiField = {
 // }
 
 export function getDashboardMidiFields(dash: Dashboard, keyPrefix: string) {
-  const sliders: MidiField[] = []
-  const buttons: MidiField[] = []
+  const sliders: MidiField[] = [];
+  const buttons: MidiField[] = [];
   dash.forEach((item) => {
     if (item.behavior === 'slider') {
-      sliders.push({ behavior: 'slider', field: `${keyPrefix}.${item.field}`, key: item.key })
+      sliders.push({ behavior: 'slider', field: `${keyPrefix}.${item.field}`, key: item.key });
     }
     if (item.behavior === 'bounceButton') {
       buttons.push({
         behavior: 'bounceButton',
         field: `${keyPrefix}.${item.field}`,
         key: item.key,
-      })
+      });
     }
     if (item.behavior === 'goNextButton') {
       buttons.push({
         behavior: 'goNextButton',
         field: `${keyPrefix}.${item.field}`,
         key: item.key,
-      })
+      });
     }
-  })
-  return { buttons, sliders }
+  });
+  return { buttons, sliders };
 }
 
-export type DashMidi = ReturnType<typeof getDashboardMidiFields>
+export type DashMidi = ReturnType<typeof getDashboardMidiFields>;
 
 export function getMidiFields(state: MainState) {
   return {
-    ready: getDashboardMidiFields(state.readyDashboard, 'readyMedia'),
-    live: getDashboardMidiFields(state.liveDashboard, 'liveMedia'),
-  }
+    ready: getDashboardMidiFields(state.readyDashboard, 'readyScene'),
+    live: getDashboardMidiFields(state.liveDashboard, 'liveScene'),
+  };
 }
