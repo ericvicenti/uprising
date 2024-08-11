@@ -89,7 +89,7 @@ export function AutoSizeEGPreview({ url, label }: { url: string; label?: string 
   const [size, setSize] = useState(1024);
   return (
     <View f={1} aspectRatio={1} maxHeight="100vw" maxWidth="100vh" padding="$4">
-      <View f={1} bg="black" onLayout={(e) => setSize(e.nativeEvent.layout.width)}>
+      <View f={1} bg="black" onLayout={(e: any) => setSize(e.nativeEvent.layout.width)}>
         {label && (
           <Text color="white" position="absolute" fontSize="$8">
             {label}
