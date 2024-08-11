@@ -25,7 +25,7 @@ import {
   YStack,
 } from '@rise-tools/kitchen-sink/server';
 import { randomUUID } from 'crypto';
-import { response } from '@rise-tools/react';
+import { ModelState, response } from '@rise-tools/react';
 import { lookup, view } from '@rise-tools/server';
 import { MediaIndex, mediaIndex } from './media';
 import { createBlankEffect, createBlankScene, mainState, mainStateUpdate, sceneState, updateScene } from './state';
@@ -131,16 +131,37 @@ export const models = {
     if (restPath.length) {
       return () => <Text>Unrecognized Control Path</Text>;
     }
-    return view((get) => (
-      <SceneScreen
-        scene={scene ? get(scene) : null}
-        onScene={(updater) => {
-          updateScene(scenePath, updater);
-        }}
-        controlPath={path}
-        onGetMediaIndex={() => get(mediaIndex)}
-      />
-    ));
+    return view((get) => {
+      let extraControls = null;
+      if (path.at(-1)?.startsWith('layer_')) {
+        const layerKey = path.at(-1)?.slice(6);
+        const layersPath = path.slice(0, -1);
+        const layersSceneModel = sceneState.get(layersPath.join(':'));
+        const layersScene = layersSceneModel ? get(layersSceneModel) : null;
+        if (layersScene && layerKey) {
+          extraControls = (
+            <LayerControls
+              layersScene={layersScene}
+              layerKey={layerKey}
+              onScene={(updater) => {
+                updateScene(layersPath, updater);
+              }}
+            />
+          );
+        }
+      }
+      return (
+        <SceneScreen
+          scene={scene ? get(scene) : null}
+          extraControls={extraControls}
+          onScene={(updater) => {
+            updateScene(scenePath, updater);
+          }}
+          controlPath={path}
+          onGetMediaIndex={() => get(mediaIndex)}
+        />
+      );
+    });
   }),
 };
 
@@ -198,25 +219,35 @@ function SceneScreen({
   scene,
   onScene,
   controlPath,
+  extraControls,
   onGetMediaIndex,
 }: {
   scene: Scene | null | undefined;
   onScene: (update: (s: Scene) => Scene) => void;
   controlPath: string[];
+  extraControls?: any;
   onGetMediaIndex: () => MediaIndex | undefined;
 }) {
   let screen = null;
   if (scene?.type === 'video') {
-    screen = <VideoScreen scene={scene} onScene={onScene} controlPath={controlPath} index={onGetMediaIndex()} />;
+    screen = (
+      <VideoScreen
+        scene={scene}
+        onScene={onScene}
+        controlPath={controlPath}
+        index={onGetMediaIndex()}
+        extraControls={extraControls}
+      />
+    );
   }
   if (scene?.type === 'sequence') {
-    screen = <SequenceScreen scene={scene} onScene={onScene} controlPath={controlPath} />;
+    screen = <SequenceScreen scene={scene} onScene={onScene} controlPath={controlPath} extraControls={extraControls} />;
   }
   if (scene?.type === 'layers') {
-    screen = <LayersScreen scene={scene} onScene={onScene} controlPath={controlPath} />;
+    screen = <LayersScreen scene={scene} onScene={onScene} controlPath={controlPath} extraControls={extraControls} />;
   }
   if (scene?.type === 'color') {
-    screen = <ColorScreen scene={scene} onScene={onScene} controlPath={controlPath} />;
+    screen = <ColorScreen scene={scene} onScene={onScene} controlPath={controlPath} extraControls={extraControls} />;
   }
   if (!screen) {
     screen = (
@@ -537,6 +568,31 @@ function EffectHueShiftControls({
   );
 }
 
+function LayerControls({
+  layersScene,
+  layerKey,
+  onScene,
+}: {
+  layersScene: LayersScene;
+  layerKey: string;
+  onScene: (update: (m: Scene) => Scene) => void;
+}) {
+  return (
+    <Button
+      icon={<LucideIcon icon="Trash" />}
+      onPress={() => {
+        onScene((scene) => {
+          if (scene.type !== 'layers') return scene;
+          return { ...scene, layers: scene.layers?.filter((layer) => layer.key !== layerKey) };
+        });
+        return response(goBack());
+      }}
+    >
+      Remove Layer
+    </Button>
+  );
+}
+
 function EffectSlider({
   label,
   value,
@@ -576,13 +632,16 @@ function SequenceScreen({
   scene,
   onScene,
   controlPath,
+  extraControls,
 }: {
   scene: SequenceScene;
   onScene: (update: (m: Scene) => Scene) => void;
   controlPath: string[];
+  extraControls?: any;
 }) {
   return (
     <YStack>
+      {extraControls}
       <ResetSceneButton controlPath={controlPath} scene={scene} onScene={onScene} />
     </YStack>
   );
@@ -592,10 +651,12 @@ function ColorScreen({
   scene,
   onScene,
   controlPath,
+  extraControls,
 }: {
   scene: ColorScene;
   onScene: (update: (m: Scene) => Scene) => void;
   controlPath: string[];
+  extraControls?: any;
 }) {
   return (
     <YStack gap="$4" padding="$4">
@@ -608,6 +669,7 @@ function ColorScreen({
       />
       <EffectSlider label="Saturation" value={scene.s} onValueChange={(v) => onScene((s) => ({ ...s, s: v }))} />
       <EffectSlider label="Brightness" value={scene.l} onValueChange={(v) => onScene((s) => ({ ...s, l: v }))} />
+      {extraControls}
       <ResetSceneButton controlPath={controlPath} scene={scene} onScene={onScene} />
     </YStack>
   );
@@ -617,10 +679,12 @@ function LayersScreen({
   scene,
   onScene,
   controlPath,
+  extraControls,
 }: {
   scene: LayersScene;
   onScene: (update: (m: Scene) => Scene) => void;
   controlPath: string[];
+  extraControls?: any;
 }) {
   return (
     <YStack>
@@ -644,6 +708,7 @@ function LayersScreen({
         footer={
           <YStack gap="$4" padding="$4">
             <NewLayerButton controlPath={controlPath} onScene={onScene} />
+            {extraControls}
             <ResetSceneButton controlPath={controlPath} scene={scene} onScene={onScene} />
           </YStack>
         }
@@ -679,7 +744,6 @@ function NewLayerButton({
                 blendAmount: 0,
               };
               onScene((scene) => {
-                console.log('add layer', scene);
                 if (scene.type !== 'layers') return scene;
                 return { ...scene, layers: [...(scene.layers || []), newLayer] };
               });
@@ -729,11 +793,13 @@ function VideoScreen({
   onScene,
   controlPath,
   index,
+  extraControls,
 }: {
   scene: VideoScene;
   onScene: (update: (m: Scene) => Scene) => void;
   controlPath: string[];
   index: MediaIndex | undefined;
+  extraControls?: any;
 }) {
   return (
     <YStack>
@@ -758,6 +824,7 @@ function VideoScreen({
       {/* <Text>{JSON.stringify(scene)}</Text> */}
       {/* <Text>{JSON.stringify(index?.files)}</Text> */}
       <EffectsButton controlPath={controlPath} />
+      {extraControls}
       <ResetSceneButton controlPath={controlPath} scene={scene} onScene={onScene} />
     </YStack>
   );
