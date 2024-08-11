@@ -1,4 +1,4 @@
-import { navigate, StackScreen } from '@rise-tools/kit-react-navigation/server';
+import { goBack, navigate, StackScreen } from '@rise-tools/kit-react-navigation/server';
 import {
   AnimatedProgress,
   BottomSheet,
@@ -6,6 +6,8 @@ import {
   BottomSheetTriggerButton,
   Button,
   DraggableFlatList,
+  Group,
+  GroupItem,
   Label,
   ScrollView,
   Separator,
@@ -16,6 +18,9 @@ import {
   SliderTrackActive,
   Spinner,
   Text,
+  View,
+  XGroup,
+  XGroupItem,
   XStack,
   YStack,
 } from '@rise-tools/kitchen-sink/server';
@@ -23,9 +28,22 @@ import { response } from '@rise-tools/react';
 import { lookup, view } from '@rise-tools/server';
 import { MediaIndex, mediaIndex } from './media';
 import { createBlankEffect, createBlankScene, mainState, mainStateUpdate, sceneState, updateScene } from './state';
-import { Scene, Transition, TransitionState, VideoScene, Effect } from './state-schema';
+import {
+  Scene,
+  Transition,
+  TransitionState,
+  VideoScene,
+  Effect,
+  BrightenEffect,
+  HueShiftEffect,
+  DarkenEffect,
+  DesaturateEffect,
+  RotateEffect,
+  ColorizeEffect,
+} from './state-schema';
 import { LucideIcon, WebView } from '@rise-tools/kitchen-sink/server';
 import { mainVideo } from './eg-video-playback';
+import { hslToHex } from './color';
 
 export const models = {
   home: view((get) => {
@@ -84,15 +102,23 @@ export const models = {
     console.log({ controlPath, scenePath, restPath });
     if (restPath[0] === 'effects') {
       if (restPath[1]) {
-        return () => null;
-        // return <EffectScreen />
+        const effectId = restPath[1].split('_')[1];
+        return view((get) => (
+          <EffectScreen
+            scene={scene ? get(scene) : null}
+            controlPath={path}
+            effectId={effectId}
+            onScene={(updater) => {
+              updateScene(scenePath, updater);
+            }}
+          />
+        ));
       }
       return view((get) => {
         return (
           <EffectsScreen
             scene={scene ? get(scene) : null}
             onScene={(updater) => {
-              console.log('effects update');
               updateScene(scenePath, updater);
             }}
             controlPath={path}
@@ -223,13 +249,13 @@ function EffectsScreen({
   onScene: (update: (m: Scene) => Scene) => void;
   controlPath: string[];
 }) {
-  console.log('EffectsScreen', scene);
   if (!scene) return <SizableText>No Scene</SizableText>;
   if (scene.type !== 'video') return <SizableText>Effects only available on video scenes</SizableText>;
   return (
-    <YStack>
+    <YStack flex={1}>
       <StackScreen title={getScreenTitle(controlPath)} headerBackTitle={' '} />
       <DraggableFlatList
+        style={{ height: '100%' }}
         data={
           scene?.effects?.map((effect) => ({
             label: (
@@ -245,6 +271,7 @@ function EffectsScreen({
         onReorder={(keyOrder) => {
           onScene((s) => ({ ...s, effects: keyOrder.map((key) => scene.effects?.find((e) => e.key === key)!) }));
         }}
+        header={<View height="$2" />}
         footer={
           <YStack gap="$4" padding="$4">
             <NewEffectButton controlPath={controlPath} onScene={onScene} />
@@ -285,13 +312,12 @@ function NewEffectButton({
         {EffectTypes.map(({ key, label }) => (
           <BottomSheetCloseButton
             onPress={() => {
-              console.log('wtf', key);
+              const newEffect = createBlankEffect(key);
               onScene((scene) => {
-                console.log('hello', key);
                 if (scene.type !== 'video') return scene;
-                return { ...scene, effects: [...(scene.effects || []), createBlankEffect(key)] };
+                return { ...scene, effects: [...(scene.effects || []), newEffect] };
               });
-              return response(navigate(`control/${controlPath.join(':')}:effect_${key}`));
+              return response(navigate(`control/${controlPath.join(':')}:effect_${newEffect.key}`));
             }}
           >
             {label}
@@ -299,6 +325,235 @@ function NewEffectButton({
         ))}
       </YStack>
     </BottomSheet>
+  );
+}
+
+function EffectScreen({
+  scene,
+  onScene,
+  controlPath,
+  effectId,
+}: {
+  scene?: Scene | null;
+  onScene: (update: (m: Scene) => Scene) => void;
+  controlPath: string[];
+  effectId: string;
+}) {
+  if (!scene) return <SizableText>No Scene</SizableText>;
+  if (scene.type !== 'video') return <SizableText>Effects only available on video scenes</SizableText>;
+  const effect = scene.effects?.find((e) => e.key === effectId);
+  let controls = null;
+  function onEffect(update: (e: Effect) => Effect) {
+    onScene((scene) => {
+      if (scene.type !== 'video') return scene;
+      return { ...scene, effects: (scene.effects || []).map((e) => (e.key === effectId ? update(e) : e)) };
+    });
+  }
+  if (effect?.type === 'brighten') {
+    controls = <EffectBrightenControls effect={effect} onEffect={onEffect} />;
+  }
+  if (effect?.type === 'darken') {
+    controls = <EffectDarkenControls effect={effect} onEffect={onEffect} />;
+  }
+  if (effect?.type === 'desaturate') {
+    controls = <EffectDesaturateControls effect={effect} onEffect={onEffect} />;
+  }
+  if (effect?.type === 'rotate') {
+    controls = <EffectRotateControls effect={effect} onEffect={onEffect} />;
+  }
+  if (effect?.type === 'hueShift') {
+    controls = <EffectHueShiftControls effect={effect} onEffect={onEffect} />;
+  }
+  if (effect?.type === 'colorize') {
+    controls = <EffectColorizeControls effect={effect} onEffect={onEffect} />;
+  }
+  return (
+    <YStack flex={1} padding="$4" gap="$4">
+      <StackScreen title={getScreenTitle(controlPath)} headerBackTitle={' '} />
+      {controls}
+      <Button
+        onPress={() => {
+          onScene((scene) => {
+            if (scene.type !== 'video') return scene;
+            return { ...scene, effects: (scene.effects || []).filter((e) => e.key !== effectId) };
+          });
+          return response(goBack());
+        }}
+        icon={<LucideIcon icon="Trash" />}
+      >
+        Remove Effect
+      </Button>
+    </YStack>
+  );
+}
+
+function EffectBrightenControls({
+  effect,
+  onEffect,
+}: {
+  effect: BrightenEffect;
+  onEffect: (update: (e: Effect) => Effect) => void;
+}) {
+  return (
+    <YStack>
+      <EffectRatio
+        label="Brightness"
+        value={effect.value}
+        onValueChange={(v) => onEffect((e) => ({ ...e, value: v }))}
+      />
+    </YStack>
+  );
+}
+
+function EffectDarkenControls({
+  effect,
+  onEffect,
+}: {
+  effect: DarkenEffect;
+  onEffect: (update: (e: Effect) => Effect) => void;
+}) {
+  return (
+    <YStack>
+      <EffectRatio label="Darkness" value={effect.value} onValueChange={(v) => onEffect((e) => ({ ...e, value: v }))} />
+    </YStack>
+  );
+}
+
+function EffectDesaturateControls({
+  effect,
+  onEffect,
+}: {
+  effect: DesaturateEffect;
+  onEffect: (update: (e: Effect) => Effect) => void;
+}) {
+  return (
+    <YStack>
+      <EffectRatio
+        label="Desaturate"
+        value={effect.value}
+        onValueChange={(v) => onEffect((e) => ({ ...e, value: v }))}
+      />
+    </YStack>
+  );
+}
+
+function EffectColorizeControls({
+  effect,
+  onEffect,
+}: {
+  effect: ColorizeEffect;
+  onEffect: (update: (e: Effect) => Effect) => void;
+}) {
+  return (
+    <YStack>
+      <EffectRatio label="Amount" value={effect.amount} onValueChange={(v) => onEffect((e) => ({ ...e, amount: v }))} />
+      <View height={50} backgroundColor={hslToHex(effect.hue, effect.saturation, 0.5)} borderRadius="$3" />
+      <EffectRatio
+        label="Hue"
+        max={360}
+        step={1}
+        value={effect.hue}
+        onValueChange={(v) => onEffect((e) => ({ ...e, hue: v }))}
+      />
+      <EffectRatio
+        label="Saturation"
+        value={effect.saturation}
+        onValueChange={(v) => onEffect((e) => ({ ...e, saturation: v }))}
+      />
+    </YStack>
+  );
+}
+
+function EffectRotateControls({
+  effect,
+  onEffect,
+}: {
+  effect: RotateEffect;
+  onEffect: (update: (e: Effect) => Effect) => void;
+}) {
+  const onValueChange = (v: number) => onEffect((e) => ({ ...e, value: v }));
+  return (
+    <YStack>
+      <EffectRatio label="Rotation" value={effect.value} onValueChange={onValueChange} />
+      <Group separator={<Separator vertical />} orientation="horizontal">
+        <GroupItem>
+          <Button
+            borderRadius={0}
+            onPress={() => {
+              onValueChange(0);
+            }}
+          >
+            0°
+          </Button>
+        </GroupItem>
+        <GroupItem>
+          <Button
+            borderRadius={0}
+            onPress={() => {
+              onValueChange(0.5);
+            }}
+          >
+            180°
+          </Button>
+        </GroupItem>
+      </Group>
+    </YStack>
+  );
+}
+
+function EffectHueShiftControls({
+  effect,
+  onEffect,
+}: {
+  effect: HueShiftEffect;
+  onEffect: (update: (e: Effect) => Effect) => void;
+}) {
+  return (
+    <YStack>
+      <EffectRatio
+        label="Hue Shift"
+        step={1}
+        min={-180}
+        max={180}
+        value={effect.value}
+        onValueChange={(v) => onEffect((e) => ({ ...e, value: v }))}
+      />
+    </YStack>
+  );
+}
+
+function EffectRatio({
+  label,
+  value,
+  onValueChange,
+  step,
+  min,
+  max,
+}: {
+  label: string;
+  value: number;
+  onValueChange: (v: number) => void;
+  step?: number;
+  min?: number;
+  max?: number;
+}) {
+  return (
+    <>
+      <Label>{label}</Label>
+      <Slider
+        value={[value]}
+        min={min == undefined ? 0 : min}
+        //</>max={1} step={0.01}
+        step={step == undefined ? 0.01 : step}
+        max={max == undefined ? 1 : max}
+        onValueChange={([v]) => onValueChange(v)}
+      >
+        <SliderTrack>
+          <SliderTrackActive />
+        </SliderTrack>
+        <SliderThumb size="$2" index={0} circular />
+      </Slider>
+    </>
   );
 }
 
