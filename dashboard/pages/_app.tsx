@@ -13,7 +13,7 @@ if (process.env.NODE_ENV === 'production') {
   require('../public/tamagui.css');
 }
 
-function App({ Component, pageProps }) {
+function App({ Component, pageProps }: any) {
   return (
     <>
       <Head>
