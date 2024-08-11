@@ -3,7 +3,7 @@ import { randomUUID } from 'crypto';
 import { existsSync } from 'fs';
 import { readFile, writeFile } from 'fs/promises';
 import { mainStatePath } from './paths';
-import { defaultMainState, MainState, MainStateSchema, Media } from './state-schema';
+import { defaultMainState, Effect, MainState, MainStateSchema, Scene } from './state-schema';
 
 const [_mainState, setMainState] = state<MainState | null>(null);
 
@@ -49,26 +49,28 @@ export function mainStateUpdate(updater: (state: MainState) => MainState) {
   }, 500);
 }
 
-function updateMediaState(prevState: Media, path: string[], updater: (media: Media) => Media): Media {
+function sceneUpdater(prevState: Scene, path: string[], updater: (scene: Scene) => Scene): Scene {
+  console.log('sceneUpdater', path);
   if (path.length === 0) {
     return updater(prevState);
   }
+  // todo, implement recursive scenes like layers and sequences
   throw new Error('lol not implemented');
 }
 
-export function updateRootMedia(controlPath: string, updater: (media: Media) => Media) {
-  const path = controlPath.split(':');
+export function updateScene(path: string[], updater: (scene: Scene) => Scene) {
   mainStateUpdate((state) => {
+    console.log('updateScene', path, state);
     if (path[0] === 'live') {
       return {
         ...state,
-        liveScene: updateMediaState(state.liveScene, path.slice(1), updater),
+        liveScene: sceneUpdater(state.liveScene, path.slice(1), updater),
       };
     }
     if (path[0] === 'ready') {
       return {
         ...state,
-        readyScene: updateMediaState(state.readyScene, path.slice(1), updater),
+        readyScene: sceneUpdater(state.readyScene, path.slice(1), updater),
       };
     }
     return state;
@@ -79,17 +81,17 @@ init().catch((e) => {
   console.error('Failed to init', e);
 });
 
-function drillMediaState(media: Media, path: string[]) {
-  if (path.length === 0) return media;
-  // todo, handle sub media paths and effects
+function drillSceneState(scene: Scene, path: string[]) {
+  if (path.length === 0) return scene;
+  // todo, handle sub scene paths
   return null;
 }
 
-function drillRootMediaState(state: MainState | null, path: string[]): Media | null {
+function drillMainSceneState(state: MainState | null, path: string[]): Scene | null {
   if (!state) return null;
   const [mediaId, ...rest] = path;
-  if (mediaId === 'live') return drillMediaState(state.liveScene, rest);
-  if (mediaId === 'ready') return drillMediaState(state.readyScene, rest);
+  if (mediaId === 'live') return drillSceneState(state.liveScene, rest);
+  if (mediaId === 'ready') return drillSceneState(state.readyScene, rest);
   return null;
 }
 
@@ -97,11 +99,11 @@ export const sceneState = lookup((controlPath) => {
   return view((get) => {
     const state = get(mainState);
     const path = controlPath.split(':');
-    return drillRootMediaState(state!, path);
+    return drillMainSceneState(state!, path);
   });
 });
 
-export function createBlankMedia(type: Media['type']): Media {
+export function createBlankScene(type: Scene['type']): Scene {
   if (type === 'off') {
     return { type };
   }
@@ -123,4 +125,51 @@ export function createBlankMedia(type: Media['type']): Media {
   }
 
   return { type: 'off' };
+}
+
+export function createBlankEffect(type: Effect['type']): Effect {
+  if (type === 'hueShift')
+    return {
+      key: randomUUID(),
+      type: 'hueShift',
+      value: 0,
+    };
+  if (type === 'desaturate')
+    return {
+      key: randomUUID(),
+      type: 'desaturate',
+      value: 0,
+    };
+  if (type === 'colorize')
+    return {
+      key: randomUUID(),
+      type: 'colorize',
+      amount: 0,
+      saturation: 1,
+      hue: 180,
+    };
+  if (type === 'darken')
+    return {
+      key: randomUUID(),
+      type: 'darken',
+      value: 0,
+    };
+  if (type === 'brighten')
+    return {
+      key: randomUUID(),
+      type: 'brighten',
+      value: 0,
+    };
+  if (type === 'rotate') {
+    return {
+      key: randomUUID(),
+      type: 'rotate',
+      value: 0,
+    };
+  }
+  // if (type === 'invert')
+  return {
+    key: randomUUID(),
+    type: 'invert',
+  };
 }

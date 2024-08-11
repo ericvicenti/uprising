@@ -125,7 +125,7 @@ export type OffScene = z.infer<typeof offSceneSchema>;
 
 export type Layer = {
   key: string;
-  media: Media;
+  scene: Scene;
   blendMode: 'add' | 'mix' | 'mask';
   blendAmount: number;
 };
@@ -133,7 +133,7 @@ export type Layer = {
 const layerSchema: z.ZodType<Layer> = z.object({
   key: z.string(),
   label: z.string().optional(),
-  media: z.lazy(() => sceneSchema),
+  scene: z.lazy(() => sceneSchema),
   blendMode: z.enum(['add', 'mix', 'mask']),
   blendAmount: z.number(),
 });
@@ -153,13 +153,13 @@ const sequenceItemSchema = z.object({
   key: z.string(),
   maxDuration: z.number().nullable().optional(),
   goOnVideoEnd: z.boolean().optional(),
-  media: z.lazy(() => sceneSchema),
+  scene: z.lazy(() => sceneSchema),
 });
 export type SequenceItem = {
   key: string;
   maxDuration?: null | number;
   goOnVideoEnd?: boolean;
-  media: Media;
+  scene: Scene;
 };
 
 const fadeTransitionSchema = z.object({
@@ -200,9 +200,9 @@ const sequenceSceneSchema: z.ZodType<SequenceScene> = z.object({
   sequence: z.array(sequenceItemSchema),
 });
 
-export type Media = OffScene | ColorScene | VideoScene | LayersScene | SequenceScene;
+export type Scene = OffScene | ColorScene | VideoScene | LayersScene | SequenceScene;
 
-const sceneSchema: z.ZodType<Media> = z.discriminatedUnion('type', [
+const sceneSchema: z.ZodType<Scene> = z.discriminatedUnion('type', [
   offSceneSchema,
   colorSceneSchema,
   videoSceneSchema,

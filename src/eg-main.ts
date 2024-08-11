@@ -27,8 +27,8 @@ import {
   InvertEffect,
   LayersScene,
   MainState,
-  Media,
   RotateEffect,
+  Scene,
   SequenceItem,
   SequenceScene,
   StateContext,
@@ -222,21 +222,21 @@ function applyGradientValue(destValue: number, valuePath: string, ctx: StateCont
   return nextValue;
 }
 
-function colorFrame(media: ColorScene, ctx: StateContext, controlPath: string): Frame {
-  const h = applyGradientValue(media.h, `${controlPath}.h`, ctx);
-  const s = applyGradientValue(media.s, `${controlPath}.s`, ctx);
-  const l = applyGradientValue(media.l, `${controlPath}.l`, ctx);
+function colorFrame(scene: ColorScene, ctx: StateContext, controlPath: string): Frame {
+  const h = applyGradientValue(scene.h, `${controlPath}.h`, ctx);
+  const s = applyGradientValue(scene.s, `${controlPath}.s`, ctx);
+  const l = applyGradientValue(scene.l, `${controlPath}.l`, ctx);
   return createSolidHSLFrame(egInfo, h, s, l);
 }
 
-function videoFrameBare(media: VideoScene, ctx: StateContext, controlPath: string): Frame {
-  const video = ctx.video.getPlayer(media.id);
-  if (media.pauseOnFrame) {
+function videoFrameBare(scene: VideoScene, ctx: StateContext, controlPath: string): Frame {
+  const video = ctx.video.getPlayer(scene.id);
+  if (scene.pauseOnFrame) {
     return video.readFrame() || blackFrame;
   }
-  if (media.params) video.setParams(media.params);
-  if (media.track) {
-    video.selectVideo(media.track);
+  if (scene.params) video.setParams(scene.params);
+  if (scene.track) {
+    video.selectVideo(scene.track);
     return video.consumeFrame() || blackFrame;
   }
   return blackFrame;
@@ -297,9 +297,9 @@ function withMediaEffects(frame: Frame, effects: Effects | undefined, ctx: State
   return outFrame;
 }
 
-function videoFrame(media: VideoScene, ctx: StateContext, controlPath: string): Frame {
-  const frame = videoFrameBare(media, ctx, controlPath);
-  return withMediaEffects(frame, media.effects, ctx, `${controlPath}.effects`);
+function videoFrame(scene: VideoScene, ctx: StateContext, controlPath: string): Frame {
+  const frame = videoFrameBare(scene, ctx, controlPath);
+  return withMediaEffects(frame, scene.effects, ctx, `${controlPath}.effects`);
 }
 
 function layerBlend(frameA: Frame, frameB: Frame, blendMode: 'mix' | 'add' | 'mask', blendAmount: number): Frame {
@@ -309,16 +309,16 @@ function layerBlend(frameA: Frame, frameB: Frame, blendMode: 'mix' | 'add' | 'ma
   return frameA;
 }
 
-function layersFrame(media: LayersScene, ctx: StateContext, controlPath: string): Frame {
-  const reverseLayers = media.layers.slice(0, -1).reverse();
-  const firstLayer = media.layers.at(-1);
+function layersFrame(scene: LayersScene, ctx: StateContext, controlPath: string): Frame {
+  const reverseLayers = scene.layers.slice(0, -1).reverse();
+  const firstLayer = scene.layers.at(-1);
   if (!firstLayer) return blackFrame;
-  let frame = mediaFrame(firstLayer.media, ctx, `${controlPath}.layer.${firstLayer.key}`);
+  let frame = mediaFrame(firstLayer.scene, ctx, `${controlPath}.layer.${firstLayer.key}`);
   reverseLayers.forEach((layer) => {
     const layerAmount = applyGradientValue(layer.blendAmount, `${controlPath}.layer.${layer.key}.blendAmount`, ctx);
     frame = layerBlend(
       frame,
-      mediaFrame(layer.media, ctx, `${controlPath}.layer.${layer.key}`),
+      mediaFrame(layer.scene, ctx, `${controlPath}.layer.${layer.key}`),
       layer.blendMode,
       layerAmount
     );
@@ -326,21 +326,21 @@ function layersFrame(media: LayersScene, ctx: StateContext, controlPath: string)
   return frame;
 }
 
-export function getSequenceActiveItem(media: SequenceScene): SequenceItem | undefined {
-  const { sequence, activeKey } = media;
-  return sequence.find((media) => media.key === activeKey) || media.sequence[0];
+export function getSequenceActiveItem(scene: SequenceScene): SequenceItem | undefined {
+  const { sequence, activeKey } = scene;
+  return sequence.find((scene) => scene.key === activeKey) || scene.sequence[0];
 }
 
-function sequenceFrame(media: SequenceScene, ctx: StateContext, controlPath: string): Frame {
-  const activeMedia = getSequenceActiveItem(media);
+function sequenceFrame(scene: SequenceScene, ctx: StateContext, controlPath: string): Frame {
+  const activeItem = getSequenceActiveItem(scene);
   const now = ctx.nowTime;
-  // handle media.transition. and transitionStartTime and transitionEndTime
-  const { transitionStartTime, transitionEndTime, transition: transitionSpec, nextActiveKey } = media;
+  // handle scene.transition. and transitionStartTime and transitionEndTime
+  const { transitionStartTime, transitionEndTime, transition: transitionSpec, nextActiveKey } = scene;
   const duration = transitionSpec?.duration || DefaultTransitionDuration;
-  if (!activeMedia) return blackFrame;
-  const activeMediaKey = `${controlPath}.item.${activeMedia.key}`;
+  if (!activeItem) return blackFrame;
+  const activeMediaKey = `${controlPath}.item.${activeItem.key}`;
 
-  const activeMediaFrame = activeMedia && mediaFrame(activeMedia.media, ctx, activeMediaKey);
+  const activeMediaFrame = activeItem && mediaFrame(activeItem.scene, ctx, activeMediaKey);
   if (!activeMediaFrame) {
     return blackFrame;
   }
@@ -354,8 +354,8 @@ function sequenceFrame(media: SequenceScene, ctx: StateContext, controlPath: str
   ) {
     // transition in progress
     const progress = (now - transitionStartTime) / duration;
-    const nextItem = media.sequence.find((item) => item.key === nextActiveKey);
-    const nextMedia = nextItem?.media;
+    const nextItem = scene.sequence.find((item) => item.key === nextActiveKey);
+    const nextMedia = nextItem?.scene;
     if (!nextMedia) return activeMediaFrame;
     const nextActiveMediaKey = `${controlPath}.item.${nextActiveKey}`;
     const nextFrame = mediaFrame(nextMedia, ctx, nextActiveMediaKey);
@@ -363,15 +363,15 @@ function sequenceFrame(media: SequenceScene, ctx: StateContext, controlPath: str
     return transition(egInfo, activeMediaFrame, nextFrame, transitionSpec, progress);
   }
 
-  return mediaFrame(activeMedia.media, ctx, `${controlPath}.item.${activeMedia.key}`);
+  return mediaFrame(activeItem.scene, ctx, `${controlPath}.item.${activeItem.key}`);
 }
 
-function mediaFrame(media: Media, ctx: StateContext, controlPath: string): Frame {
-  if (media.type === 'color') return colorFrame(media, ctx, controlPath);
-  if (media.type === 'video') return videoFrame(media, ctx, controlPath);
-  if (media.type === 'layers') return layersFrame(media, ctx, controlPath);
-  if (media.type === 'sequence') return sequenceFrame(media, ctx, controlPath);
-  if (media.type === 'off') return blackFrame;
+function mediaFrame(scene: Scene, ctx: StateContext, controlPath: string): Frame {
+  if (scene.type === 'color') return colorFrame(scene, ctx, controlPath);
+  if (scene.type === 'video') return videoFrame(scene, ctx, controlPath);
+  if (scene.type === 'layers') return layersFrame(scene, ctx, controlPath);
+  if (scene.type === 'sequence') return sequenceFrame(scene, ctx, controlPath);
+  if (scene.type === 'off') return blackFrame;
   return blackFrame;
 }
 

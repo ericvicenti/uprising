@@ -9,7 +9,7 @@ import { getEGLiveFrame, getEGReadyFrame, getSequenceActiveItem } from './eg-mai
 import { getMidiFields } from './eg-midi-fields';
 import { subscribeMidiEvents } from './eg-midi-server';
 import { egSacnService } from './eg-sacn';
-import { egVideo } from './eg-video-playback';
+import { egVideo, mainVideo } from './eg-video-playback';
 import { createEGViewServer } from './eg-view-server';
 import {
   DashboardItem,
@@ -17,25 +17,13 @@ import {
   Effect,
   MainState,
   MainStateSchema,
-  Media,
+  Scene,
   SliderField,
 } from './state-schema';
-import {
-  getDashboardUI,
-  getEffectsUI,
-  getEffectUI,
-  getLibraryKeyUI,
-  getLibraryUI,
-  getMediaLayerUI,
-  getMediaSequenceUI,
-  getMediaTitle,
-  getMediaUI,
-  getUIRoot,
-  UIContext,
-} from './ui';
+
 import { models } from './models';
 import { mainState, mainStateUpdate } from './state';
-import { libraryPath, mainStatePath, controlPath, statePath } from './paths';
+import { libraryPath, mainStatePath, mediaPath, statePath } from './paths';
 
 // let mainState: MainState = defaultMainState;
 
@@ -108,31 +96,6 @@ const sacn = egSacnService(egInfo);
 const liveViewServer = createEGViewServer(3889);
 const readyViewServer = createEGViewServer(3888);
 
-const video = egVideo(egInfo, controlPath, {
-  // const video = egVideo(egInfo, process.env.EG_MEDIA_PATH || 'eg-media-2', {
-  onPlayerUpdate: () => {
-    // updateUI();
-  },
-  onMediaUpdate: (media) => {
-    // wsServer.update("videoList", [
-    //   { key: "none", label: "None" },
-    //   ...media.files.map((m) => ({ key: m.fileSha256, label: m.title })),
-    // ]);
-  },
-  onFrameInfo: (playerId, playback) => {
-    // if (
-    //   playback &&
-    //   playback.playingFrame != null &&
-    //   playback.playingFrame % 10 === 0
-    // ) {
-    //   wsServer.update(`videoFrameInfo/${playerId}`, {
-    //     index: playback.playingFrame,
-    //     isForward: playback.isForward,
-    //   });
-    // }
-  },
-});
-
 const recentGradientValues: Record<string, number> = {};
 const bounceTimes: Record<string, number> = {};
 
@@ -148,7 +111,7 @@ function mainLoop() {
     time: startTime,
     nowTime,
     relativeTime,
-    video,
+    video: mainVideo,
     recentGradientValues,
     bounceTimes,
     mainState: currentMainState,
@@ -212,7 +175,7 @@ function performMainLoopStep(inMs: number) {
 // ) {
 //   // console.log('updateSceneUI', mediaKey, childrenOnly, sceneState)
 //   if (!childrenOnly)
-//     wsServer.update(mediaKey, getMediaUI(mediaKey, sceneState, uiContext));
+//     wsServer.update(mediaKey, getSceneUI(mediaKey, sceneState, uiContext));
 //   if (sceneState.type === "video") {
 //     wsServer.update(
 //       `${mediaKey}.effects`,
@@ -230,7 +193,7 @@ function performMainLoopStep(inMs: number) {
 //     sceneState.layers?.forEach((layer) => {
 //       // console.log('layer UI', layer.key)
 //       const layerKey = `${mediaKey}.layer.${layer.key}`;
-//       wsServer.update(layerKey, getMediaLayerUI(layerKey, layer, uiContext));
+//       wsServer.update(layerKey, getSceneLayerUI(layerKey, layer, uiContext));
 //       updateSceneUI(layerKey, layer.media, uiContext, true);
 //     });
 //     return;
@@ -240,7 +203,7 @@ function performMainLoopStep(inMs: number) {
 //       const sequenceItemKey = `${mediaKey}.item.${sequenceItem.key}`;
 //       wsServer.update(
 //         sequenceItemKey,
-//         getMediaSequenceUI(sequenceItemKey, sequenceItem, uiContext)
+//         getSceneSequenceUI(sequenceItemKey, sequenceItem, uiContext)
 //       );
 //       updateSceneUI(sequenceItemKey, sequenceItem.media, uiContext, true);
 //     });
@@ -350,7 +313,7 @@ mainState.subscribe((state) => {
   // init all video players
   matchAllScenes(state, (media) => {
     if (media.type === 'video') {
-      const player = video.getPlayer(media.id);
+      const player = mainVideo.getPlayer(media.id);
       if (media.params) player.setParams(media.params);
       if (media.track) player.selectVideo(media.track);
       return true;
@@ -398,8 +361,8 @@ mainState.subscribe((state) => {
 //   const isFirstEffect = prevState === state;
 //   const prevVideoNodes = isFirstEffect
 //     ? []
-//     : matchActiveMedia(prevState, (media) => media.type === "video");
-//   const videoNodes = matchActiveMedia(state, (media) => media.type === "video");
+//     : matchActiveScene(prevState, (media) => media.type === "video");
+//   const videoNodes = matchActiveScene(state, (media) => media.type === "video");
 //   const videoNodesToStart = videoNodes.filter(
 //     (videoNode) =>
 //       !prevVideoNodes.some(
@@ -412,7 +375,7 @@ mainState.subscribe((state) => {
 //   );
 //   videoNodesToStart.forEach(([controlPath, media]) => {
 //     if (media.type !== "video") return;
-//     const player = video.getPlayer(media.id);
+//     const player = mainVideo.getPlayer(media.id);
 //     if (!player) return;
 //     setTimeout(() => {
 //       const info = player.getInfo();
@@ -447,7 +410,7 @@ function handleVideoEndBehavior() {
     if (!activeItem) return false;
     if (activeItem.scene.type !== 'video') return false;
     if (!activeItem.goOnVideoEnd) return false;
-    const player = video.getPlayer(activeItem.scene.id);
+    const player = mainVideo.getPlayer(activeItem.scene.id);
     if (!player) return false;
     const playingFrame = player.getPlayingFrame();
     const frameCount = player.getFrameCount();
@@ -478,7 +441,7 @@ function handleVideoEndBehavior() {
       sequenceTransitionEnds[controlPathString] = setTimeout(
         () => {
           delete sequenceTransitionEnds[controlPathString];
-          rootMediaUpdate(controlPathString.split('.'), (media: Media): Media => {
+          rootSceneUpdate(controlPathString.split('.'), (media: Media): Media => {
             if (media.type !== 'sequence') return media;
             const { nextActiveKey } = media;
             if (!nextActiveKey) return media;
@@ -507,79 +470,79 @@ function handleVideoEndBehavior() {
 
 // mainStateEffect(mainState, mainState);
 
-function fetchMedia(media: Media, path: string[]): [string[], Media][] {
-  if (media.type === 'layers') {
-    return [[path, media], ...media.layers.flatMap((layer) => fetchMedia(layer.media, [...path, 'layer', layer.key]))];
+function fetchMedia(scene: Scene, path: string[]): [string[], Scene][] {
+  if (scene.type === 'layers') {
+    return [[path, scene], ...scene.layers.flatMap((layer) => fetchMedia(layer.scene, [...path, 'layer', layer.key]))];
   }
-  if (media.type === 'sequence') {
-    return [[path, media], ...media.sequence.flatMap((item) => fetchMedia(item.media, [...path, 'item', item.key]))];
+  if (scene.type === 'sequence') {
+    return [[path, scene], ...scene.sequence.flatMap((item) => fetchMedia(item.scene, [...path, 'item', item.key]))];
   }
-  return [[path, media]];
+  return [[path, scene]];
 }
 
-function fetchAllScenes(state: MainState): [string[], Media][] {
+function fetchAllScenes(state: MainState): [string[], Scene][] {
   return [...fetchMedia(state.liveScene, ['liveScene']), ...fetchMedia(state.readyScene, ['readyScene'])];
 }
 
-function fetchActiveMedia(media: Media, path: string[]): [string[], Media][] {
-  if (media.type === 'layers') {
+function fetchActiveScene(scene: Scene, path: string[]): [string[], Scene][] {
+  if (scene.type === 'layers') {
     return [
-      [path, media],
-      ...media.layers.flatMap((layer) => fetchActiveMedia(layer.media, [...path, 'layer', layer.key])),
+      [path, scene],
+      ...scene.layers.flatMap((layer) => fetchActiveScene(layer.scene, [...path, 'layer', layer.key])),
     ];
   }
-  if (media.type === 'sequence') {
-    const active = getSequenceActiveItem(media);
+  if (scene.type === 'sequence') {
+    const active = getSequenceActiveItem(scene);
     if (active) {
-      return [[path, media], ...fetchActiveMedia(active.media, [...path, 'item', active.key])];
+      return [[path, scene], ...fetchActiveScene(active.scene, [...path, 'item', active.key])];
     }
   }
-  return [[path, media]];
+  return [[path, scene]];
 }
 
-function fetchAllActiveMedia(state: MainState): [string[], Media][] {
-  return [...fetchActiveMedia(state.liveScene, ['liveScene']), ...fetchActiveMedia(state.readyScene, ['readyScene'])];
+function fetchAllActiveScene(state: MainState): [string[], Scene][] {
+  return [...fetchActiveScene(state.liveScene, ['liveScene']), ...fetchActiveScene(state.readyScene, ['readyScene'])];
 }
 
-function getMediaCrawl(media: Media, path: string[]): Media | undefined {
+function getSceneCrawl(media: Scene, path: string[]): Scene | undefined {
   if (path.length === 0) return media;
   const [firstKey, ...restPath] = path;
   if (firstKey === 'layer' && media.type === 'layers') {
     const layerKey = restPath[0];
     const layer = media.layers?.find((layer) => layer.key === layerKey);
     if (!layer) return undefined;
-    return getMediaCrawl(layer.media, restPath.slice(1));
+    return getSceneCrawl(layer.scene, restPath.slice(1));
   }
   if (firstKey === 'item' && media.type === 'sequence') {
     const itemKey = restPath[0];
     const item = media.sequence?.find((item) => item.key === itemKey);
     if (!item) return undefined;
-    return getMediaCrawl(item.media, restPath.slice(1));
+    return getSceneCrawl(item.scene, restPath.slice(1));
   }
 }
-function getMedia(state: MainState, path: string[]): Media | undefined {
+function getScene(state: MainState, path: string[]): Scene | undefined {
   const [firstKey, ...restPath] = path;
-  if (firstKey === 'liveScene') return getMediaCrawl(state.liveScene, restPath);
-  if (firstKey === 'readyScene') return getMediaCrawl(state.readyScene, restPath);
+  if (firstKey === 'liveScene') return getSceneCrawl(state.liveScene, restPath);
+  if (firstKey === 'readyScene') return getSceneCrawl(state.readyScene, restPath);
   return undefined;
 }
 
 function matchAllScenes(
   state: MainState,
-  filter: (media: Media, controlPath: string[]) => boolean
-): [string[], Media][] {
+  filter: (scene: Scene, controlPath: string[]) => boolean
+): [string[], Scene][] {
   const allMedia = fetchAllScenes(state);
-  return allMedia.filter(([controlPath, media]) => filter(media, controlPath));
+  return allMedia.filter(([controlPath, scene]) => filter(scene, controlPath));
 }
 
-function matchActiveMedia(
+function matchActiveScene(
   state: MainState,
-  filter: (media: Media, controlPath: string[]) => boolean
-): [string[], Media][] {
-  const allMedia = fetchAllActiveMedia(state);
-  return allMedia.filter(([controlPath, media]) => {
+  filter: (scene: Scene, controlPath: string[]) => boolean
+): [string[], Scene][] {
+  const allMedia = fetchAllActiveScene(state);
+  return allMedia.filter(([controlPath, scene]) => {
     if (controlPath[0] === 'liveScene') {
-      return filter(media, controlPath);
+      return filter(scene, controlPath);
     }
     return false;
   });
@@ -909,7 +872,7 @@ function matchActiveMedia(
 //     return false;
 //   }
 
-//   rootMediaUpdate(controlPath, (media): Media => {
+//   rootSceneUpdate(controlPath, (media): Media => {
 //     if (media.type !== "video" || !media.effects) {
 //       return media;
 //     }
@@ -1047,7 +1010,7 @@ function matchActiveMedia(
 //   );
 // }
 
-// function rootMediaUpdate(
+// function rootSceneUpdate(
 //   controlPath: string[],
 //   updater: (media: Media) => Media
 // ) {
@@ -1091,7 +1054,7 @@ function matchActiveMedia(
 //   return false;
 // }
 
-// function getMediaSliders(
+// function getSceneSliders(
 //   state: MainState,
 //   controlPath: string[]
 // ): Record<string, SliderField> | null {
@@ -1104,7 +1067,7 @@ function matchActiveMedia(
 //   return null;
 // }
 
-// function getMediaDashboard(
+// function getSceneDashboard(
 //   state: MainState,
 //   controlPath: string[]
 // ): DashboardItem[] | null {
@@ -1129,37 +1092,37 @@ function matchActiveMedia(
 //     return false;
 //   }
 //   if (action === "saveMedia") {
-//     const mediaValue = getMedia(mainState, controlPath);
+//     const mediaValue = getScene(mainState, controlPath);
 //     if (!mediaValue) return true;
-//     const key = `${getMediaTitle(mediaValue, uiContext)} - ${new Date().toLocaleString()}`;
+//     const key = `${getSceneTitle(mediaValue, uiContext)} - ${new Date().toLocaleString()}`;
 //     saveMedia(key, {
 //       media: mediaValue,
-//       sliders: getMediaSliders(mainState, controlPath),
-//       dashboard: getMediaDashboard(mainState, controlPath),
+//       sliders: getSceneSliders(mainState, controlPath),
+//       dashboard: getSceneDashboard(mainState, controlPath),
 //     });
 //     return true;
 //   }
 //   if (action === "metadata") {
-//     rootMediaUpdate(controlPath, (media) => ({
+//     rootSceneUpdate(controlPath, (media) => ({
 //       ...media,
 //       label: event.payload.label,
 //     }));
 //     return true;
 //   }
 //   if (action === "clear") {
-//     rootMediaUpdate(controlPath, () => createBlankMedia("off"));
+//     rootSceneUpdate(controlPath, () => createBlankScene("off"));
 //     return true;
 //   }
 //   if (action === "mode") {
 //     const mode = event.payload;
-//     rootMediaUpdate(controlPath, () => createBlankMedia(mode));
+//     rootSceneUpdate(controlPath, () => createBlankScene(mode));
 //     return true;
 //   }
 //   if (action === "color") {
 //     const colorField = event.dataState.action?.[3];
 //     const number = event.payload[0];
 //     if (colorField === "h" || colorField === "s" || colorField === "l") {
-//       rootMediaUpdate(controlPath, (media) => ({
+//       rootSceneUpdate(controlPath, (media) => ({
 //         ...media,
 //         [colorField]: number,
 //       }));
@@ -1168,13 +1131,13 @@ function matchActiveMedia(
 //   }
 //   if (action === "track") {
 //     const track = event.payload;
-//     rootMediaUpdate(controlPath, (media) => ({ ...media, track }));
+//     rootSceneUpdate(controlPath, (media) => ({ ...media, track }));
 //     return true;
 //   }
 //   if (action === "restart") {
-//     const media = getMedia(mainState, controlPath);
+//     const media = getScene(mainState, controlPath);
 //     if (media?.type === "video") {
-//       const player = video.getPlayer(media.id);
+//       const player = mainVideo.getPlayer(media.id);
 //       if (player) {
 //         player.restart();
 //       }
@@ -1182,13 +1145,13 @@ function matchActiveMedia(
 //     return true;
 //   }
 //   if (action === "pause") {
-//     rootMediaUpdate(controlPath, (media) => {
+//     rootSceneUpdate(controlPath, (media) => {
 //       if (media.type !== "video") {
 //         console.warn("pause on non-video media", media);
 //         return media;
 //       }
 //       const { id } = media;
-//       const player = video.getPlayer(id);
+//       const player = mainVideo.getPlayer(id);
 //       if (!player) {
 //         console.warn("cannot get player for pausing", media);
 //       }
@@ -1199,7 +1162,7 @@ function matchActiveMedia(
 //     return true;
 //   }
 //   if (action === "play") {
-//     rootMediaUpdate(controlPath, (media) => {
+//     rootSceneUpdate(controlPath, (media) => {
 //       if (media.type !== "video") {
 //         console.warn("play on non-video media", media);
 //         return media;
@@ -1210,7 +1173,7 @@ function matchActiveMedia(
 //   }
 //   if (action === "loopBounce") {
 //     const loopBounce = event.payload;
-//     rootMediaUpdate(controlPath, (media) => {
+//     rootSceneUpdate(controlPath, (media) => {
 //       if (media.type !== "video") {
 //         console.warn("loopBounce on non-video media", media);
 //         return media;
@@ -1227,7 +1190,7 @@ function matchActiveMedia(
 //   }
 //   if (action === "reverse") {
 //     const reverse = event.payload;
-//     rootMediaUpdate(controlPath, (media) => {
+//     rootSceneUpdate(controlPath, (media) => {
 //       if (media.type !== "video") {
 //         console.warn("reverse on non-video media", media);
 //         return media;
@@ -1245,7 +1208,7 @@ function matchActiveMedia(
 //   if (action === "addEffect") {
 //     const effectType = event.payload;
 //     const newEffect: Effect = createBlankEffect(effectType);
-//     rootMediaUpdate(controlPath, (media) => {
+//     rootSceneUpdate(controlPath, (media) => {
 //       if (media.type !== "video") {
 //         console.warn("addEffect on non-video media", media);
 //         return media;
@@ -1258,7 +1221,7 @@ function matchActiveMedia(
 //     return true;
 //   }
 //   if (action === "effectOrder") {
-//     rootMediaUpdate(controlPath, (media) => {
+//     rootSceneUpdate(controlPath, (media) => {
 //       if (media.type !== "video") {
 //         console.warn("effectOrder on non-video media", media);
 //         return media;
@@ -1276,7 +1239,7 @@ function matchActiveMedia(
 //   }
 //   if (action === "addLayer") {
 //     const mediaType = event.payload;
-//     rootMediaUpdate(controlPath, (media) => {
+//     rootSceneUpdate(controlPath, (media) => {
 //       if (media.type !== "layers") {
 //         console.warn("addLayer on non-layer media", media);
 //         return media;
@@ -1286,7 +1249,7 @@ function matchActiveMedia(
 //         layers: [
 //           {
 //             key: randomUUID(),
-//             media: createBlankMedia(mediaType),
+//             media: createBlankScene(mediaType),
 //             blendMode: "mix",
 //             blendAmount: 0,
 //           },
@@ -1298,7 +1261,7 @@ function matchActiveMedia(
 //   }
 //   if (action === "addToSequence") {
 //     const mediaType = event.payload;
-//     rootMediaUpdate(controlPath, (media) => {
+//     rootSceneUpdate(controlPath, (media) => {
 //       if (media.type !== "sequence") {
 //         console.warn("addToSequence on non-sequence media", media);
 //         return media;
@@ -1309,7 +1272,7 @@ function matchActiveMedia(
 //           ...(media.sequence || []),
 //           {
 //             key: randomUUID(),
-//             media: createBlankMedia(mediaType),
+//             media: createBlankScene(mediaType),
 //           },
 //         ],
 //       };
@@ -1324,12 +1287,12 @@ function matchActiveMedia(
 //   if (action === "addToSequenceFromLibrary") {
 //     const libraryKey = event.payload;
 //     console.log("adding to sequence", libraryKey);
-//     rootMediaUpdate(controlPath, (media) => {
+//     rootSceneUpdate(controlPath, (media) => {
 //       return media;
 //     });
 //   }
 //   if (action === "transitionDuration") {
-//     rootMediaUpdate(controlPath, (media) => {
+//     rootSceneUpdate(controlPath, (media) => {
 //       if (media.type !== "sequence") {
 //         console.warn("addToSequence on non-sequence media", media);
 //         return media;
@@ -1355,7 +1318,7 @@ function matchActiveMedia(
 //     const layerKey = controlPath.at(-1);
 //     const blendMode = event.payload;
 //     const targetPath = controlPath.slice(0, -2);
-//     rootMediaUpdate(targetPath, (media) => {
+//     rootSceneUpdate(targetPath, (media) => {
 //       if (media.type !== "layers") {
 //         console.warn("blendMode on non-layer media", media);
 //         return media;
@@ -1376,7 +1339,7 @@ function matchActiveMedia(
 //     const layerKey = controlPath.at(-1);
 //     const blendAmount = event.payload[0];
 //     const targetPath = controlPath.slice(0, -2);
-//     rootMediaUpdate(targetPath, (media) => {
+//     rootSceneUpdate(targetPath, (media) => {
 //       if (media.type !== "layers") {
 //         console.warn("blendMode on non-layer media", media);
 //         return media;
@@ -1395,7 +1358,7 @@ function matchActiveMedia(
 //   }
 //   if (action === "sequenceOrder") {
 //     const order = event.payload;
-//     rootMediaUpdate(controlPath, (media) => {
+//     rootSceneUpdate(controlPath, (media) => {
 //       if (media.type !== "sequence") return media;
 //       return {
 //         ...media,
@@ -1410,7 +1373,7 @@ function matchActiveMedia(
 //   }
 //   if (action === "layerOrder") {
 //     const order = event.payload;
-//     rootMediaUpdate(controlPath, (media) => {
+//     rootSceneUpdate(controlPath, (media) => {
 //       if (media.type !== "layers") return media;
 //       return {
 //         ...media,
@@ -1426,7 +1389,7 @@ function matchActiveMedia(
 //   if (action === "removeLayer") {
 //     const targetPath = controlPath.slice(0, -2);
 //     const layerKey = event.dataState.action.at(-1);
-//     rootMediaUpdate(targetPath, (media) => {
+//     rootSceneUpdate(targetPath, (media) => {
 //       if (media.type !== "layers") return media;
 //       return {
 //         ...media,
@@ -1438,7 +1401,7 @@ function matchActiveMedia(
 //   if (action === "removeItem") {
 //     const targetPath = controlPath.slice(0, -2);
 //     const itemKey = event.dataState.action.at(-1);
-//     rootMediaUpdate(targetPath, (media) => {
+//     rootSceneUpdate(targetPath, (media) => {
 //       if (media.type !== "sequence") return media;
 //       return {
 //         ...media,
@@ -1455,7 +1418,7 @@ function matchActiveMedia(
 //     if (event.payload === false) duration = null;
 //     const targetPath = controlPath.slice(0, -2);
 //     const itemKey = controlPath.at(-1);
-//     rootMediaUpdate(targetPath, (media) => {
+//     rootSceneUpdate(targetPath, (media) => {
 //       if (media.type !== "sequence") return media;
 //       return {
 //         ...media,
@@ -1472,7 +1435,7 @@ function matchActiveMedia(
 //   if (action === "goOnVideoEnd") {
 //     const targetPath = controlPath.slice(0, -2);
 //     const itemKey = controlPath.at(-1);
-//     rootMediaUpdate(targetPath, (media) => {
+//     rootSceneUpdate(targetPath, (media) => {
 //       if (media.type !== "sequence") return media;
 //       return {
 //         ...media,
@@ -1491,7 +1454,7 @@ function matchActiveMedia(
 // }
 
 function goNext(controlPath: string[]) {
-  // rootMediaUpdate(controlPath, (media) => {
+  // rootSceneUpdate(controlPath, (media) => {
   //   if (media.type !== "sequence") {
   //     console.warn("goNext on non-sequence media", media);
   //     return media;
@@ -1629,7 +1592,7 @@ subscribeMidiEvents((event) => {
 //   }, 150);
 // }
 
-function createBlankMedia(type: Media['type']): Media {
+function createBlankScene(type: Media['type']): Media {
   if (type === 'off') {
     return { type };
   }
@@ -1651,51 +1614,4 @@ function createBlankMedia(type: Media['type']): Media {
   }
 
   return { type: 'off' };
-}
-
-function createBlankEffect(type: Effect['type']): Effect {
-  if (type === 'hueShift')
-    return {
-      key: randomUUID(),
-      type: 'hueShift',
-      value: 0,
-    };
-  if (type === 'desaturate')
-    return {
-      key: randomUUID(),
-      type: 'desaturate',
-      value: 0,
-    };
-  if (type === 'colorize')
-    return {
-      key: randomUUID(),
-      type: 'colorize',
-      amount: 0,
-      saturation: 1,
-      hue: 180,
-    };
-  if (type === 'darken')
-    return {
-      key: randomUUID(),
-      type: 'darken',
-      value: 0,
-    };
-  if (type === 'brighten')
-    return {
-      key: randomUUID(),
-      type: 'brighten',
-      value: 0,
-    };
-  if (type === 'rotate') {
-    return {
-      key: randomUUID(),
-      type: 'rotate',
-      value: 0,
-    };
-  }
-  // if (type === 'invert')
-  return {
-    key: randomUUID(),
-    type: 'invert',
-  };
 }

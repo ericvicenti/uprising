@@ -1,20 +1,8 @@
 import { query } from '@rise-tools/server';
-import { controlPath } from './paths';
 import { readFile } from 'fs/promises';
-import { basename, join } from 'path';
+import { join } from 'path';
 import { z } from 'zod';
-
-// "fileSha256": "ef08b664c8ace9629fff3fb997c0734aa33e92dd7b1081581be1135d3616ef06",
-// "width": 1024,
-// "height": 1024,
-// "durationInSeconds": 3875.456,
-// "completeTime": 1708311105163,
-// "videoName": "AK warm water.mp4",
-// "filePath": "videos/AK warm water.mp4",
-// "egFramesFile": "ef08b664c8ace9629fff3fb997c0734aa33e92dd7b1081581be1135d3616ef06.eg.data",
-// "audioFile": "ef08b664c8ace9629fff3fb997c0734aa33e92dd7b1081581be1135d3616ef06.mp3",
-// "title": "AK warm water",
-// "importerVersion": 2
+import { mediaPath } from './paths';
 
 const mediaFileSchema = z.object({
   fileSha256: z.string(),
@@ -37,7 +25,7 @@ const mediaIndexSchema = z.object({
 });
 
 export const mediaIndex = query(async () => {
-  const mediaIndex = join(controlPath, 'index.json');
+  const mediaIndex = join(mediaPath, 'index.json');
   const indexData = JSON.parse(await readFile(mediaIndex, { encoding: 'utf-8' }));
   const index = mediaIndexSchema.parse(indexData);
   return {

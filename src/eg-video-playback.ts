@@ -3,10 +3,12 @@ import { createReadStream, read, stat } from 'fs-extra';
 import { join } from 'path';
 import { promisify } from 'util';
 import zlib from 'zlib';
+import { eg as egInfo } from './eg';
 
 import { EGInfo } from './eg';
 import { Frame } from './eg-sacn';
 import { DBFile, DBState, readDb } from './eg-video';
+import { mediaPath } from './paths';
 
 export type VideoPlaybackInstance = {
   readFrame: () => Frame | null;
@@ -41,7 +43,7 @@ export type EGVideo = ReturnType<typeof egVideo>;
 
 export function egVideo(
   eg: EGInfo,
-  controlPath: string,
+  mediaPath: string,
   {
     onMediaUpdate,
     onPlayerUpdate,
@@ -57,7 +59,7 @@ export function egVideo(
   let mediaDb: null | DBState = null;
 
   async function updateDb() {
-    mediaDb = await readDb(controlPath);
+    mediaDb = await readDb(mediaPath);
     onMediaUpdate(mediaDb);
   }
 
@@ -72,7 +74,7 @@ export function egVideo(
     fileSha256: string,
     params: PlaybackParams = {}
   ): Promise<VideoPlaybackInstance> {
-    const dbState = await readDb(controlPath);
+    const dbState = await readDb(mediaPath);
     const file = dbState.files.find((file) => file.fileSha256 === fileSha256);
     // console.log('will load video', file)
 
@@ -88,7 +90,7 @@ export function egVideo(
     if (!framesFile) {
       throw new Error('No frames file found for ' + fileSha256);
     }
-    const framesFilePath = join(controlPath, framesFile);
+    const framesFilePath = join(mediaPath, framesFile);
     const fileInfo = await stat(framesFilePath);
     // console.log('fileInfo', fileInfo)
     if (fileInfo.size % frameSize !== 0) {
@@ -355,3 +357,28 @@ export function egVideo(
     incrementTime,
   };
 }
+
+export const mainVideo = egVideo(egInfo, mediaPath, {
+  // const video = egVideo(egInfo, process.env.EG_MEDIA_PATH || 'eg-media-2', {
+  onPlayerUpdate: () => {
+    // updateUI();
+  },
+  onMediaUpdate: (media) => {
+    // wsServer.update("videoList", [
+    //   { key: "none", label: "None" },
+    //   ...media.files.map((m) => ({ key: m.fileSha256, label: m.title })),
+    // ]);
+  },
+  onFrameInfo: (playerId, playback) => {
+    // if (
+    //   playback &&
+    //   playback.playingFrame != null &&
+    //   playback.playingFrame % 10 === 0
+    // ) {
+    //   wsServer.update(`videoFrameInfo/${playerId}`, {
+    //     index: playback.playingFrame,
+    //     isForward: playback.isForward,
+    //   });
+    // }
+  },
+});
