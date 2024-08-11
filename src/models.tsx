@@ -24,6 +24,7 @@ import {
   XStack,
   YStack,
 } from '@rise-tools/kitchen-sink/server';
+import { randomUUID } from 'crypto';
 import { response } from '@rise-tools/react';
 import { lookup, view } from '@rise-tools/server';
 import { MediaIndex, mediaIndex } from './media';
@@ -40,6 +41,10 @@ import {
   DesaturateEffect,
   RotateEffect,
   ColorizeEffect,
+  LayersScene,
+  SequenceScene,
+  Layer,
+  ColorScene,
 } from './state-schema';
 import { LucideIcon, WebView } from '@rise-tools/kitchen-sink/server';
 import { mainVideo } from './eg-video-playback';
@@ -48,7 +53,6 @@ import { hslToHex } from './color';
 export const models = {
   home: view((get) => {
     const state = get(mainState);
-    console.log('huh?!', state);
     if (!state) return <Spinner />;
     return (
       <YStack gap="$4" padding="$4">
@@ -88,7 +92,6 @@ export const models = {
   }),
   browse_videos: view((get) => {
     const media = get(mediaIndex);
-    console.log(media);
     return (
       <YStack gap="$4" padding="$4">
         {media?.files?.map((file) => <Button onPress={() => {}}>{file.title}</Button>)}
@@ -99,7 +102,6 @@ export const models = {
     const path = controlPath.split(':');
     const { scenePath, restPath } = unpackControlPath(path);
     const scene = sceneState.get(scenePath.join(':'));
-    console.log({ controlPath, scenePath, restPath });
     if (restPath[0] === 'effects') {
       if (restPath[1]) {
         const effectId = restPath[1].split('_')[1];
@@ -169,7 +171,6 @@ function AutoTransitionProgress({
   const now = Date.now();
   const { autoStartTime } = transitionState;
   const { duration } = transition;
-  console.log({ autoStartTime, duration });
   const timeRemaining = Math.max(0, autoStartTime ? duration - (now - autoStartTime) : 0);
   const currentProgress = autoStartTime ? Math.min(1, (now - autoStartTime) / duration) : null;
   return (
@@ -185,7 +186,7 @@ function AutoTransitionProgress({
   );
 }
 
-const newMediaOptions = [
+const SceneTypes = [
   { key: 'off', label: 'Off' },
   { key: 'color', label: 'Color' },
   { key: 'video', label: 'Video' },
@@ -211,12 +212,18 @@ function SceneScreen({
   if (scene?.type === 'sequence') {
     screen = <SequenceScreen scene={scene} onScene={onScene} controlPath={controlPath} />;
   }
+  if (scene?.type === 'layers') {
+    screen = <LayersScreen scene={scene} onScene={onScene} controlPath={controlPath} />;
+  }
+  if (scene?.type === 'color') {
+    screen = <ColorScreen scene={scene} onScene={onScene} controlPath={controlPath} />;
+  }
   if (!screen) {
     screen = (
       <YStack>
         <SelectDropdown
           value={scene?.type || 'off'}
-          options={newMediaOptions}
+          options={SceneTypes}
           onSelect={(key) => {
             onScene(() => createBlankScene(key));
           }}
@@ -396,7 +403,7 @@ function EffectBrightenControls({
 }) {
   return (
     <YStack>
-      <EffectRatio
+      <EffectSlider
         label="Brightness"
         value={effect.value}
         onValueChange={(v) => onEffect((e) => ({ ...e, value: v }))}
@@ -414,7 +421,11 @@ function EffectDarkenControls({
 }) {
   return (
     <YStack>
-      <EffectRatio label="Darkness" value={effect.value} onValueChange={(v) => onEffect((e) => ({ ...e, value: v }))} />
+      <EffectSlider
+        label="Darkness"
+        value={effect.value}
+        onValueChange={(v) => onEffect((e) => ({ ...e, value: v }))}
+      />
     </YStack>
   );
 }
@@ -428,7 +439,7 @@ function EffectDesaturateControls({
 }) {
   return (
     <YStack>
-      <EffectRatio
+      <EffectSlider
         label="Desaturate"
         value={effect.value}
         onValueChange={(v) => onEffect((e) => ({ ...e, value: v }))}
@@ -446,16 +457,20 @@ function EffectColorizeControls({
 }) {
   return (
     <YStack>
-      <EffectRatio label="Amount" value={effect.amount} onValueChange={(v) => onEffect((e) => ({ ...e, amount: v }))} />
+      <EffectSlider
+        label="Amount"
+        value={effect.amount}
+        onValueChange={(v) => onEffect((e) => ({ ...e, amount: v }))}
+      />
       <View height={50} backgroundColor={hslToHex(effect.hue, effect.saturation, 0.5)} borderRadius="$3" />
-      <EffectRatio
+      <EffectSlider
         label="Hue"
         max={360}
         step={1}
         value={effect.hue}
         onValueChange={(v) => onEffect((e) => ({ ...e, hue: v }))}
       />
-      <EffectRatio
+      <EffectSlider
         label="Saturation"
         value={effect.saturation}
         onValueChange={(v) => onEffect((e) => ({ ...e, saturation: v }))}
@@ -474,7 +489,7 @@ function EffectRotateControls({
   const onValueChange = (v: number) => onEffect((e) => ({ ...e, value: v }));
   return (
     <YStack>
-      <EffectRatio label="Rotation" value={effect.value} onValueChange={onValueChange} />
+      <EffectSlider label="Rotation" value={effect.value} onValueChange={onValueChange} />
       <Group separator={<Separator vertical />} orientation="horizontal">
         <GroupItem>
           <Button
@@ -510,7 +525,7 @@ function EffectHueShiftControls({
 }) {
   return (
     <YStack>
-      <EffectRatio
+      <EffectSlider
         label="Hue Shift"
         step={1}
         min={-180}
@@ -522,7 +537,7 @@ function EffectHueShiftControls({
   );
 }
 
-function EffectRatio({
+function EffectSlider({
   label,
   value,
   onValueChange,
@@ -543,15 +558,15 @@ function EffectRatio({
       <Slider
         value={[value]}
         min={min == undefined ? 0 : min}
-        //</>max={1} step={0.01}
         step={step == undefined ? 0.01 : step}
         max={max == undefined ? 1 : max}
         onValueChange={([v]) => onValueChange(v)}
+        height={50}
       >
-        <SliderTrack>
+        <SliderTrack height={50}>
           <SliderTrackActive />
         </SliderTrack>
-        <SliderThumb size="$2" index={0} circular />
+        {/* <SliderThumb size="$2" index={0} circular /> */}
       </Slider>
     </>
   );
@@ -562,15 +577,120 @@ function SequenceScreen({
   onScene,
   controlPath,
 }: {
-  scene: Scene;
+  scene: SequenceScene;
   onScene: (update: (m: Scene) => Scene) => void;
   controlPath: string[];
 }) {
   return (
     <YStack>
-      <EffectsButton controlPath={controlPath} />
-      <ResetButton controlPath={controlPath} scene={scene} onScene={onScene} />
+      <ResetSceneButton controlPath={controlPath} scene={scene} onScene={onScene} />
     </YStack>
+  );
+}
+
+function ColorScreen({
+  scene,
+  onScene,
+  controlPath,
+}: {
+  scene: ColorScene;
+  onScene: (update: (m: Scene) => Scene) => void;
+  controlPath: string[];
+}) {
+  return (
+    <YStack gap="$4" padding="$4">
+      <EffectSlider
+        label="Hue"
+        value={scene.h}
+        onValueChange={(v) => onScene((s) => ({ ...s, h: v }))}
+        max={360}
+        step={1}
+      />
+      <EffectSlider label="Saturation" value={scene.s} onValueChange={(v) => onScene((s) => ({ ...s, s: v }))} />
+      <EffectSlider label="Brightness" value={scene.l} onValueChange={(v) => onScene((s) => ({ ...s, l: v }))} />
+      <ResetSceneButton controlPath={controlPath} scene={scene} onScene={onScene} />
+    </YStack>
+  );
+}
+
+function LayersScreen({
+  scene,
+  onScene,
+  controlPath,
+}: {
+  scene: LayersScene;
+  onScene: (update: (m: Scene) => Scene) => void;
+  controlPath: string[];
+}) {
+  return (
+    <YStack>
+      <DraggableFlatList
+        style={{ height: '100%' }}
+        data={
+          scene?.layers?.map((layer) => ({
+            label: (
+              <Button marginHorizontal="$4" marginVertical="$1" disabled>
+                {layer.key}
+              </Button>
+            ),
+            key: layer.key,
+            onPress: navigate(`control/${controlPath.join(':')}:layer_${layer.key}`),
+          })) || []
+        }
+        onReorder={(keyOrder) => {
+          onScene((s) => ({ ...s, layers: keyOrder.map((key) => scene.layers?.find((e) => e.key === key)!) }));
+        }}
+        header={<View height="$2" />}
+        footer={
+          <YStack gap="$4" padding="$4">
+            <NewLayerButton controlPath={controlPath} onScene={onScene} />
+            <ResetSceneButton controlPath={controlPath} scene={scene} onScene={onScene} />
+          </YStack>
+        }
+      />
+    </YStack>
+  );
+}
+
+function NewLayerButton({
+  controlPath,
+  onScene,
+}: {
+  controlPath: string[];
+  onScene: (update: (m: Scene) => Scene) => void;
+}) {
+  return (
+    <BottomSheet
+      trigger={
+        <YStack>
+          <Separator marginVertical="$4" />
+          <BottomSheetTriggerButton icon={<LucideIcon icon="PlusCircle" />}>New Layer</BottomSheetTriggerButton>
+        </YStack>
+      }
+    >
+      <YStack gap="$3">
+        {SceneTypes.map(({ key, label }) => (
+          <BottomSheetCloseButton
+            onPress={() => {
+              const newLayer: Layer = {
+                scene: createBlankScene(key),
+                key: randomUUID(),
+                blendMode: 'mix',
+                blendAmount: 0,
+              };
+              onScene((scene) => {
+                console.log('add layer', scene);
+                if (scene.type !== 'layers') return scene;
+                return { ...scene, layers: [...(scene.layers || []), newLayer] };
+              });
+              return response(navigate(`control/${controlPath.join(':')}:layer_${newLayer.key}`));
+            }}
+          >
+            {label}
+          </BottomSheetCloseButton>
+        ))}
+      </YStack>
+    </BottomSheet>
   );
 }
 
@@ -582,7 +702,7 @@ function EffectsButton({ controlPath }: { controlPath: string[] }) {
   );
 }
 
-function ResetButton({
+function ResetSceneButton({
   controlPath,
   scene,
   onScene,
@@ -594,7 +714,7 @@ function ResetButton({
   return (
     <SelectDropdown
       value={scene?.type || 'off'}
-      options={newMediaOptions}
+      options={SceneTypes}
       triggerProps={{ theme: 'red', icon: <LucideIcon icon="UndoDot" /> }}
       triggerLabel="Reset Scene"
       onSelect={(key) => {
@@ -638,7 +758,7 @@ function VideoScreen({
       {/* <Text>{JSON.stringify(scene)}</Text> */}
       {/* <Text>{JSON.stringify(index?.files)}</Text> */}
       <EffectsButton controlPath={controlPath} />
-      <ResetButton controlPath={controlPath} scene={scene} onScene={onScene} />
+      <ResetSceneButton controlPath={controlPath} scene={scene} onScene={onScene} />
     </YStack>
   );
 }
@@ -701,11 +821,13 @@ function EditTransition({
           onValueChange={(duration) => {
             onTransition((t) => ({ ...t, duration: duration[0] }));
           }}
+          height={50}
         >
-          <SliderTrack>
-            <SliderTrackActive />
+          <SliderTrack height={50}>
+            <SliderTrackActive backgroundColor="$color11" />
+            {/* <SliderTrackActive width="30%" backgroundColor="$color12" height={1} top={45} bottom={20} /> */}
           </SliderTrack>
-          <SliderThumb size="$2" index={0} circular />
+          {/* <SliderThumb size="$2" index={0} circular /> */}
         </Slider>
       </YStack>
     </BottomSheet>

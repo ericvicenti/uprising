@@ -49,18 +49,30 @@ export function mainStateUpdate(updater: (state: MainState) => MainState) {
   }, 500);
 }
 
-function sceneUpdater(prevState: Scene, path: string[], updater: (scene: Scene) => Scene): Scene {
-  console.log('sceneUpdater', path);
+function sceneUpdater(prevScene: Scene, path: string[], updater: (scene: Scene) => Scene): Scene {
   if (path.length === 0) {
-    return updater(prevState);
+    return updater(prevScene);
   }
-  // todo, implement recursive scenes like layers and sequences
+  if (path[0].startsWith('layer_')) {
+    const [layerTerm, ...rest] = path;
+    const layerKey = layerTerm.slice(6);
+    if (prevScene.type !== 'layers') return prevScene;
+    return {
+      ...prevScene,
+      layers: prevScene.layers.map((layer) => {
+        if (layer.key !== layerKey) return layer;
+        return {
+          ...layer,
+          scene: sceneUpdater(layer.scene, rest, updater),
+        };
+      }),
+    };
+  }
   throw new Error('lol not implemented');
 }
 
 export function updateScene(path: string[], updater: (scene: Scene) => Scene) {
   mainStateUpdate((state) => {
-    console.log('updateScene', path, state);
     if (path[0] === 'live') {
       return {
         ...state,
@@ -83,7 +95,12 @@ init().catch((e) => {
 
 function drillSceneState(scene: Scene, path: string[]) {
   if (path.length === 0) return scene;
-  // todo, handle sub scene paths
+  if (path[0].startsWith('layer_')) {
+    if (scene.type !== 'layers') return null;
+    const layerKey = path[0].slice(6);
+    const layer = scene.layers.find((layer) => layer.key === layerKey);
+    return layer?.scene || null;
+  }
   return null;
 }
 
