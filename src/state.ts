@@ -68,6 +68,21 @@ function sceneUpdater(prevScene: Scene, path: string[], updater: (scene: Scene) 
       }),
     };
   }
+  if (path[0].startsWith('item_')) {
+    const [itemTerm, ...rest] = path;
+    const itemKey = itemTerm.slice(5);
+    if (prevScene.type !== 'sequence') return prevScene;
+    return {
+      ...prevScene,
+      sequence: prevScene.sequence.map((item) => {
+        if (item.key !== itemKey) return item;
+        return {
+          ...item,
+          scene: sceneUpdater(item.scene, rest, updater),
+        };
+      }),
+    };
+  }
   throw new Error('lol not implemented');
 }
 
@@ -99,6 +114,12 @@ function drillSceneState(scene: Scene, path: string[]) {
     if (scene.type !== 'layers') return null;
     const layerKey = path[0].slice(6);
     const layer = scene.layers.find((layer) => layer.key === layerKey);
+    return layer?.scene || null;
+  }
+  if (path[0].startsWith('item_')) {
+    if (scene.type !== 'sequence') return null;
+    const layerKey = path[0].slice(5);
+    const layer = scene.sequence.find((item) => item.key === layerKey);
     return layer?.scene || null;
   }
   return null;

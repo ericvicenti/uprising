@@ -1,6 +1,5 @@
 import { goBack, navigate, StackScreen } from '@rise-tools/kit-react-navigation/server';
 import {
-  AnimatedProgress,
   BottomSheet,
   BottomSheetCloseButton,
   BottomSheetTriggerButton,
@@ -8,6 +7,7 @@ import {
   DraggableFlatList,
   Group,
   GroupItem,
+  Heading,
   Label,
   ScrollView,
   Separator,
@@ -19,8 +19,6 @@ import {
   Spinner,
   Text,
   View,
-  XGroup,
-  XGroupItem,
   XStack,
   YStack,
 } from '@rise-tools/kitchen-sink/server';
@@ -45,10 +43,12 @@ import {
   SequenceScene,
   Layer,
   ColorScene,
+  SequenceItem,
 } from './state-schema';
-import { LucideIcon, WebView } from '@rise-tools/kitchen-sink/server';
+import { LucideIcon } from '@rise-tools/kitchen-sink/server';
 import { mainVideo } from './eg-video-playback';
 import { hslToHex } from './color';
+import { getSequenceActiveItem } from './eg-main';
 
 export const models = {
   home: view((get) => {
@@ -138,13 +138,30 @@ export const models = {
         const layersPath = path.slice(0, -1);
         const layersSceneModel = sceneState.get(layersPath.join(':'));
         const layersScene = layersSceneModel ? get(layersSceneModel) : null;
-        if (layersScene && layerKey) {
+        if (layersScene?.type === 'layers' && layerKey) {
           extraControls = (
             <LayerControls
               layersScene={layersScene}
               layerKey={layerKey}
               onScene={(updater) => {
                 updateScene(layersPath, updater);
+              }}
+            />
+          );
+        }
+      }
+      if (path.at(-1)?.startsWith('item_')) {
+        const itemKey = path.at(-1)?.slice(5);
+        const sequencePath = path.slice(0, -1);
+        const sequenceSceneModel = sceneState.get(sequencePath.join(':'));
+        const sequenceScene = sequenceSceneModel ? get(sequenceSceneModel) : null;
+        if (sequenceScene?.type === 'sequence' && itemKey) {
+          extraControls = (
+            <SqeuenceItemControls
+              sequenceScene={sequenceScene}
+              itemKey={itemKey}
+              onScene={(updater) => {
+                updateScene(sequencePath, updater);
               }}
             />
           );
@@ -194,17 +211,18 @@ function AutoTransitionProgress({
   const { duration } = transition;
   const timeRemaining = Math.max(0, autoStartTime ? duration - (now - autoStartTime) : 0);
   const currentProgress = autoStartTime ? Math.min(1, (now - autoStartTime) / duration) : null;
-  return (
-    <YStack height={10}>
-      <AnimatedProgress
-        duration={timeRemaining}
-        endProgress={autoStartTime ? 1 : 0}
-        startProgress={currentProgress}
-        size="small"
-        opacity={autoStartTime ? 1 : 0}
-      />
-    </YStack>
-  );
+  return null;
+  // return (
+  //   <YStack height={10}>
+  //     <AnimatedProgress
+  //       duration={timeRemaining}
+  //       endProgress={autoStartTime ? 1 : 0}
+  //       startProgress={currentProgress}
+  //       size="small"
+  //       opacity={autoStartTime ? 1 : 0}
+  //     />
+  //   </YStack>
+  // );
 }
 
 const SceneTypes = [
@@ -568,6 +586,12 @@ function EffectHueShiftControls({
   );
 }
 
+const LayerMixOptions = [
+  { key: 'mix', label: 'Mix' },
+  { key: 'mask', label: 'Mask' },
+  { key: 'add', label: 'Add' },
+] as const;
+
 function LayerControls({
   layersScene,
   layerKey,
@@ -577,19 +601,89 @@ function LayerControls({
   layerKey: string;
   onScene: (update: (m: Scene) => Scene) => void;
 }) {
+  const layer = layersScene.layers?.find((layer) => layer.key === layerKey);
+  if (!layer) return null;
+  const blendMode = LayerMixOptions.find((o) => o.key === layer.blendMode);
   return (
-    <Button
-      icon={<LucideIcon icon="Trash" />}
-      onPress={() => {
-        onScene((scene) => {
-          if (scene.type !== 'layers') return scene;
-          return { ...scene, layers: scene.layers?.filter((layer) => layer.key !== layerKey) };
-        });
-        return response(goBack());
-      }}
-    >
-      Remove Layer
-    </Button>
+    <Section title="Layer">
+      <SelectDropdown
+        options={LayerMixOptions}
+        onSelect={(value) => {
+          if (!value) return;
+          onScene((scene) => {
+            if (scene.type !== 'layers') return scene;
+            return {
+              ...scene,
+              layers: scene.layers?.map((l) => (l.key === layerKey ? { ...l, blendMode: value } : l)),
+            };
+          });
+        }}
+        value={layer.blendMode}
+      />
+      <EffectSlider
+        label={`${blendMode?.label || 'Blend'} Amount`}
+        value={layer.blendAmount}
+        onValueChange={(v) => {
+          onScene((scene) => {
+            if (scene.type !== 'layers') return scene;
+            return {
+              ...scene,
+              layers: scene.layers?.map((l) => (l.key === layerKey ? { ...l, blendAmount: v } : l)),
+            };
+          });
+        }}
+      />
+      <Button
+        icon={<LucideIcon icon="Trash" />}
+        onPress={() => {
+          onScene((scene) => {
+            if (scene.type !== 'layers') return scene;
+            return { ...scene, layers: scene.layers?.filter((layer) => layer.key !== layerKey) };
+          });
+          return response(goBack());
+        }}
+      >
+        Remove Layer
+      </Button>
+    </Section>
+  );
+}
+
+function SqeuenceItemControls({
+  sequenceScene,
+  itemKey,
+  onScene,
+}: {
+  sequenceScene: SequenceScene;
+  itemKey: string;
+  onScene: (update: (m: Scene) => Scene) => void;
+}) {
+  const item = sequenceScene.sequence?.find((item) => item.key === itemKey);
+  if (!item) return null;
+  return (
+    <Section title="Sequence Item">
+      <Button
+        icon={<LucideIcon icon="Trash" />}
+        onPress={() => {
+          onScene((scene) => {
+            if (scene.type !== 'sequence') return scene;
+            return { ...scene, sequence: scene.sequence?.filter((item) => item.key !== itemKey) };
+          });
+          return response(goBack());
+        }}
+      >
+        Remove Item
+      </Button>
+    </Section>
+  );
+}
+
+function Section({ title, children }: { title?: string; children: any }) {
+  return (
+    <YStack gap="$4" padding="$4">
+      {title ? <Heading>{title}</Heading> : null}
+      {children}
+    </YStack>
   );
 }
 
@@ -641,8 +735,72 @@ function SequenceScreen({
 }) {
   return (
     <YStack>
-      {extraControls}
-      <ResetSceneButton controlPath={controlPath} scene={scene} onScene={onScene} />
+      <DraggableFlatList
+        style={{ height: '100%' }}
+        data={
+          scene?.sequence?.map((item) => ({
+            label: (
+              <Button marginHorizontal="$4" marginVertical="$1" disabled>
+                {item.key}
+              </Button>
+            ),
+            key: item.key,
+            onPress: navigate(`control/${controlPath.join(':')}:item_${item.key}`),
+          })) || []
+        }
+        onReorder={(keyOrder) => {
+          onScene((s) => ({ ...s, sequence: keyOrder.map((key) => scene.sequence?.find((e) => e.key === key)!) }));
+        }}
+        header={<View height="$2" />}
+        footer={
+          <YStack gap="$4" padding="$4">
+            <Button
+              icon={<LucideIcon icon="Play" />}
+              onPress={() => {
+                onScene((scene) => {
+                  if (scene.type !== 'sequence') {
+                    console.warn('goNext on non-sequence media');
+                    return scene;
+                  }
+                  if (!scene.sequence.length) return scene;
+                  const active = getSequenceActiveItem(scene);
+                  if (!active) {
+                    console.warn('goNext: active media not identified');
+                    return scene;
+                  }
+                  const activeIndex = scene.sequence.findIndex((item) => item.key === active.key);
+                  if (activeIndex === -1) {
+                    console.warn('goNext: active media not found in sequence');
+                    return scene;
+                  }
+                  const nextIndex = (activeIndex + 1) % scene.sequence.length;
+                  const nextKey = scene.sequence[nextIndex]?.key;
+                  if (!nextKey) {
+                    console.warn('goNext: next media not identified');
+                    return scene;
+                  }
+                  let transitionDuration = 0;
+                  if (scene.transition?.duration) {
+                    transitionDuration = scene.transition.duration;
+                  }
+                  const now = Date.now();
+                  return {
+                    ...scene,
+                    nextActiveKey: nextKey,
+                    transitionEndTime: now + transitionDuration,
+                    transitionStartTime: now,
+                  };
+                });
+              }}
+            >
+              Go Next
+            </Button>
+            <NewSequenceItem controlPath={controlPath} onScene={onScene} />
+            {extraControls}
+            <ResetSceneButton controlPath={controlPath} scene={scene} onScene={onScene} />
+          </YStack>
+        }
+      />
     </YStack>
   );
 }
@@ -758,6 +916,45 @@ function NewLayerButton({
   );
 }
 
+function NewSequenceItem({
+  controlPath,
+  onScene,
+}: {
+  controlPath: string[];
+  onScene: (update: (m: Scene) => Scene) => void;
+}) {
+  return (
+    <BottomSheet
+      trigger={
+        <YStack>
+          <Separator marginVertical="$4" />
+          <BottomSheetTriggerButton icon={<LucideIcon icon="PlusCircle" />}>Add to Sequence</BottomSheetTriggerButton>
+        </YStack>
+      }
+    >
+      <YStack gap="$3">
+        {SceneTypes.map(({ key, label }) => (
+          <BottomSheetCloseButton
+            onPress={() => {
+              const newLayer: SequenceItem = {
+                scene: createBlankScene(key),
+                key: randomUUID(),
+              };
+              onScene((scene) => {
+                if (scene.type !== 'sequence') return scene;
+                return { ...scene, sequence: [...(scene.sequence || []), newLayer] };
+              });
+              return response(navigate(`control/${controlPath.join(':')}:item_${newLayer.key}`));
+            }}
+          >
+            {label}
+          </BottomSheetCloseButton>
+        ))}
+      </YStack>
+    </BottomSheet>
+  );
+}
+
 function EffectsButton({ controlPath }: { controlPath: string[] }) {
   return (
     <Button onPress={navigate(`control/${controlPath.join(':')}:effects`)} icon={<LucideIcon icon="Sparkles" />}>
@@ -848,7 +1045,7 @@ function SelectDropdown<Options extends Readonly<{ label: string; key: string }[
   return (
     <BottomSheet
       trigger={
-        <BottomSheetTriggerButton {...triggerProps}>
+        <BottomSheetTriggerButton iconAfter={<LucideIcon icon="ChevronDown" />} {...triggerProps}>
           {triggerLabel || options.find((o) => o.key === value)?.label || emptyLabel}
         </BottomSheetTriggerButton>
       }
@@ -857,9 +1054,11 @@ function SelectDropdown<Options extends Readonly<{ label: string; key: string }[
         <YStack>
           {options.map((option) => (
             <BottomSheetCloseButton
+              key={option.key}
               onPress={() => {
                 onSelect(option.key);
               }}
+              iconAfter={option.key === value ? <LucideIcon icon="Check" /> : null}
             >
               {option.label}
             </BottomSheetCloseButton>

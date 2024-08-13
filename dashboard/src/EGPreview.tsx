@@ -90,12 +90,12 @@ export function AutoSizeEGPreview({ url, label }: { url: string; label?: string 
   return (
     <View f={1} aspectRatio={1} maxHeight="100vw" maxWidth="100vh" padding="$4">
       <View f={1} bg="black" onLayout={(e: any) => setSize(e.nativeEvent.layout.width)}>
+        <EGPreview url={url} size={size} />
         {label && (
           <Text color="white" position="absolute" fontSize="$8">
             {label}
           </Text>
         )}
-        <EGPreview url={url} size={size} />
       </View>
     </View>
   );
