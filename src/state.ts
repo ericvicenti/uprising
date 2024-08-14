@@ -134,11 +134,14 @@ function drillMainSceneState(state: MainState | null, path: string[]): Scene | n
 }
 
 export const sceneState = lookup((controlPath) => {
-  return view((get) => {
-    const state = get(mainState);
-    const path = controlPath.split(':');
-    return drillMainSceneState(state!, path);
-  });
+  return view(
+    (get) => {
+      const state = get(mainState);
+      const path = controlPath.split(':');
+      return drillMainSceneState(state!, path);
+    },
+    { compare: true }
+  );
 });
 
 export function createBlankScene(type: Scene['type']): Scene {

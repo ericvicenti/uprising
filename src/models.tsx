@@ -22,6 +22,7 @@ import {
   XStack,
   YStack,
 } from '@rise-tools/kitchen-sink/server';
+import { AnimatedProgress, SmoothSlider } from '@rise-tools/kit/server';
 import { randomUUID } from 'crypto';
 import { ModelState, response } from '@rise-tools/react';
 import { lookup, view } from '@rise-tools/server';
@@ -49,55 +50,66 @@ import { LucideIcon } from '@rise-tools/kitchen-sink/server';
 import { mainVideo } from './eg-video-playback';
 import { hslToHex } from './color';
 import { getSequenceActiveItem } from './eg-main';
+// import { isEqual } from 'lodash';
+
+function isEqual(a: any, b: any) {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
 
 export const models = {
-  home: view((get) => {
-    const state = get(mainState);
-    if (!state) return <Spinner />;
-    return (
-      <YStack gap="$4" padding="$4">
-        <Button onPress={navigate('control/live')}>Live</Button>
-        <Button onPress={navigate('control/ready')}>Ready</Button>
-        <Button
-          onPress={() => {
-            mainStateUpdate((state) => ({
-              ...state,
-              transitionState: {
-                ...state.transitionState,
-                autoStartTime: Date.now(),
-              },
-            }));
-          }}
-          disabled={state.transitionState.manual !== null}
-          icon={<LucideIcon icon="PlayCircle" />}
-        >
-          Start Transition
-        </Button>
-        <EditTransition
-          transition={state.transition}
-          onTransition={(update) => mainStateUpdate((state) => ({ ...state, transition: update(state.transition) }))}
-        />
-        <AutoTransitionProgress transitionState={state.transitionState} transition={state.transition} />
-        {/* <YStack width="100%" aspectRatio={1} backgroundColor="red">
+  home: view(
+    (get) => {
+      const state = get(mainState);
+      if (!state) return <Spinner />;
+      return (
+        <YStack gap="$4" padding="$4">
+          <Button onPress={navigate('control/live')}>Live</Button>
+          <Button onPress={navigate('control/ready')}>Ready</Button>
+          <Button
+            onPress={() => {
+              mainStateUpdate((state) => ({
+                ...state,
+                transitionState: {
+                  ...state.transitionState,
+                  autoStartTime: Date.now(),
+                },
+              }));
+            }}
+            disabled={state.transitionState.manual !== null}
+            icon={<LucideIcon icon="PlayCircle" />}
+          >
+            Start Transition
+          </Button>
+          <EditTransition
+            transition={state.transition}
+            onTransition={(update) => mainStateUpdate((state) => ({ ...state, transition: update(state.transition) }))}
+          />
+          <AutoTransitionProgress transitionState={state.transitionState} transition={state.transition} />
+          {/* <YStack width="100%" aspectRatio={1} backgroundColor="red">
         <WebView
           style={{ flex: 1, backgroundColor: 'white', pointerEvents: 'none' }}
           source={{ uri: 'http://localhost:3000/eg-live' }}
         />
       </YStack> */}
-        {/* <Text>{JSON.stringify(get(mainState))}</Text> */}
-        <Button onPress={navigate('browse_videos')}>Browse scene</Button>
-        <Button onPress={navigate('browse_media')}>Browse Library</Button>
-      </YStack>
-    );
-  }),
-  browse_videos: view((get) => {
-    const media = get(mediaIndex);
-    return (
-      <YStack gap="$4" padding="$4">
-        {media?.files?.map((file) => <Button onPress={() => {}}>{file.title}</Button>)}
-      </YStack>
-    );
-  }),
+          {/* <Text>{JSON.stringify(get(mainState))}</Text> */}
+          <Button onPress={navigate('browse_videos')}>Browse scene</Button>
+          <Button onPress={navigate('browse_media')}>Browse Library</Button>
+        </YStack>
+      );
+    },
+    { compare: isEqual }
+  ),
+  browse_videos: view(
+    (get) => {
+      const media = get(mediaIndex);
+      return (
+        <YStack gap="$4" padding="$4">
+          {media?.files?.map((file) => <Button onPress={() => {}}>{file.title}</Button>)}
+        </YStack>
+      );
+    },
+    { compare: isEqual }
+  ),
   control: lookup((controlPath) => {
     const path = controlPath.split(':');
     const { scenePath, restPath } = unpackControlPath(path);
@@ -105,80 +117,89 @@ export const models = {
     if (restPath[0] === 'effects') {
       if (restPath[1]) {
         const effectId = restPath[1].split('_')[1];
-        return view((get) => (
-          <EffectScreen
-            scene={scene ? get(scene) : null}
-            controlPath={path}
-            effectId={effectId}
-            onScene={(updater) => {
-              updateScene(scenePath, updater);
-            }}
-          />
-        ));
-      }
-      return view((get) => {
-        return (
-          <EffectsScreen
-            scene={scene ? get(scene) : null}
-            onScene={(updater) => {
-              updateScene(scenePath, updater);
-            }}
-            controlPath={path}
-          />
+        return view(
+          (get) => (
+            <EffectScreen
+              scene={scene ? get(scene) : null}
+              controlPath={path}
+              effectId={effectId}
+              onScene={(updater) => {
+                updateScene(scenePath, updater);
+              }}
+            />
+          ),
+          { compare: isEqual }
         );
-      });
+      }
+      return view(
+        (get) => {
+          return (
+            <EffectsScreen
+              scene={scene ? get(scene) : null}
+              onScene={(updater) => {
+                updateScene(scenePath, updater);
+              }}
+              controlPath={path}
+            />
+          );
+        },
+        { compare: isEqual }
+      );
     }
     if (restPath.length) {
       return () => <Text>Unrecognized Control Path</Text>;
     }
-    return view((get) => {
-      let extraControls = null;
-      if (path.at(-1)?.startsWith('layer_')) {
-        const layerKey = path.at(-1)?.slice(6);
-        const layersPath = path.slice(0, -1);
-        const layersSceneModel = sceneState.get(layersPath.join(':'));
-        const layersScene = layersSceneModel ? get(layersSceneModel) : null;
-        if (layersScene?.type === 'layers' && layerKey) {
-          extraControls = (
-            <LayerControls
-              layersScene={layersScene}
-              layerKey={layerKey}
-              onScene={(updater) => {
-                updateScene(layersPath, updater);
-              }}
-            />
-          );
+    return view(
+      (get) => {
+        let extraControls = null;
+        if (path.at(-1)?.startsWith('layer_')) {
+          const layerKey = path.at(-1)?.slice(6);
+          const layersPath = path.slice(0, -1);
+          const layersSceneModel = sceneState.get(layersPath.join(':'));
+          const layersScene = layersSceneModel ? get(layersSceneModel) : null;
+          if (layersScene?.type === 'layers' && layerKey) {
+            extraControls = (
+              <LayerControls
+                layersScene={layersScene}
+                layerKey={layerKey}
+                onScene={(updater) => {
+                  updateScene(layersPath, updater);
+                }}
+              />
+            );
+          }
         }
-      }
-      if (path.at(-1)?.startsWith('item_')) {
-        const itemKey = path.at(-1)?.slice(5);
-        const sequencePath = path.slice(0, -1);
-        const sequenceSceneModel = sceneState.get(sequencePath.join(':'));
-        const sequenceScene = sequenceSceneModel ? get(sequenceSceneModel) : null;
-        if (sequenceScene?.type === 'sequence' && itemKey) {
-          extraControls = (
-            <SqeuenceItemControls
-              sequenceScene={sequenceScene}
-              itemKey={itemKey}
-              onScene={(updater) => {
-                updateScene(sequencePath, updater);
-              }}
-            />
-          );
+        if (path.at(-1)?.startsWith('item_')) {
+          const itemKey = path.at(-1)?.slice(5);
+          const sequencePath = path.slice(0, -1);
+          const sequenceSceneModel = sceneState.get(sequencePath.join(':'));
+          const sequenceScene = sequenceSceneModel ? get(sequenceSceneModel) : null;
+          if (sequenceScene?.type === 'sequence' && itemKey) {
+            extraControls = (
+              <SqeuenceItemControls
+                sequenceScene={sequenceScene}
+                itemKey={itemKey}
+                onScene={(updater) => {
+                  updateScene(sequencePath, updater);
+                }}
+              />
+            );
+          }
         }
-      }
-      return (
-        <SceneScreen
-          scene={scene ? get(scene) : null}
-          extraControls={extraControls}
-          onScene={(updater) => {
-            updateScene(scenePath, updater);
-          }}
-          controlPath={path}
-          onGetMediaIndex={() => get(mediaIndex)}
-        />
-      );
-    });
+        return (
+          <SceneScreen
+            scene={scene ? get(scene) : null}
+            extraControls={extraControls}
+            onScene={(updater) => {
+              updateScene(scenePath, updater);
+            }}
+            controlPath={path}
+            onGetMediaIndex={() => get(mediaIndex)}
+          />
+        );
+      },
+      { compare: isEqual }
+    );
   }),
 };
 
@@ -211,18 +232,17 @@ function AutoTransitionProgress({
   const { duration } = transition;
   const timeRemaining = Math.max(0, autoStartTime ? duration - (now - autoStartTime) : 0);
   const currentProgress = autoStartTime ? Math.min(1, (now - autoStartTime) / duration) : null;
-  return null;
-  // return (
-  //   <YStack height={10}>
-  //     <AnimatedProgress
-  //       duration={timeRemaining}
-  //       endProgress={autoStartTime ? 1 : 0}
-  //       startProgress={currentProgress}
-  //       size="small"
-  //       opacity={autoStartTime ? 1 : 0}
-  //     />
-  //   </YStack>
-  // );
+  return (
+    <YStack height={10}>
+      <AnimatedProgress
+        duration={timeRemaining}
+        endProgress={autoStartTime ? 1 : 0}
+        startProgress={currentProgress}
+        size="small"
+        opacity={autoStartTime ? 1 : 0}
+      />
+    </YStack>
+  );
 }
 
 const SceneTypes = [
@@ -705,7 +725,15 @@ function EffectSlider({
   return (
     <>
       <Label>{label}</Label>
-      <Slider
+      <SmoothSlider
+        value={value}
+        min={min == undefined ? 0 : min}
+        step={step == undefined ? 0.01 : step}
+        max={max == undefined ? 1 : max}
+        onValueChange={(v) => onValueChange(v)}
+        size={50}
+      />
+      {/* <Slider
         value={[value]}
         min={min == undefined ? 0 : min}
         step={step == undefined ? 0.01 : step}
@@ -716,8 +744,7 @@ function EffectSlider({
         <SliderTrack height={50}>
           <SliderTrackActive />
         </SliderTrack>
-        {/* <SliderThumb size="$2" index={0} circular /> */}
-      </Slider>
+      </Slider> */}
     </>
   );
 }
@@ -1080,21 +1107,14 @@ function EditTransition({
     <BottomSheet trigger={<BottomSheetTriggerButton>Edit Transition</BottomSheetTriggerButton>}>
       <YStack>
         <Label>Duration - {Math.round(transition.duration / 100) / 10} sec</Label>
-        <Slider
-          value={[transition.duration]}
-          max={15_000}
+        <SmoothSlider
+          value={transition.duration}
+          min={0}
           step={10}
-          onValueChange={(duration) => {
-            onTransition((t) => ({ ...t, duration: duration[0] }));
-          }}
-          height={50}
-        >
-          <SliderTrack height={50}>
-            <SliderTrackActive backgroundColor="$color11" />
-            {/* <SliderTrackActive width="30%" backgroundColor="$color12" height={1} top={45} bottom={20} /> */}
-          </SliderTrack>
-          {/* <SliderThumb size="$2" index={0} circular /> */}
-        </Slider>
+          max={15_000}
+          onValueChange={(v) => onTransition((t) => ({ ...t, duration: v }))}
+          size={50}
+        />
       </YStack>
     </BottomSheet>
   );
