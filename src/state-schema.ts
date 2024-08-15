@@ -202,7 +202,7 @@ const sequenceSceneSchema: z.ZodType<SequenceScene> = z.object({
 
 export type Scene = OffScene | ColorScene | VideoScene | LayersScene | SequenceScene;
 
-const sceneSchema: z.ZodType<Scene> = z.discriminatedUnion('type', [
+export const sceneSchema: z.ZodType<Scene> = z.discriminatedUnion('type', [
   offSceneSchema,
   colorSceneSchema,
   videoSceneSchema,

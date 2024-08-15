@@ -8,7 +8,9 @@ import {
   Group,
   GroupItem,
   Heading,
+  InputField,
   Label,
+  RiseForm,
   ScrollView,
   Separator,
   SizableText,
@@ -17,7 +19,9 @@ import {
   SliderTrack,
   SliderTrackActive,
   Spinner,
+  SubmitButton,
   Text,
+  toast,
   View,
   XStack,
   YStack,
@@ -50,6 +54,7 @@ import { LucideIcon } from '@rise-tools/kitchen-sink/server';
 import { mainVideo } from './eg-video-playback';
 import { hslToHex } from './color';
 import { getSequenceActiveItem } from './eg-main';
+import { libraryIndex, writeLibraryItem } from './library';
 // import { isEqual } from 'lodash';
 
 function isEqual(a: any, b: any) {
@@ -62,39 +67,49 @@ export const models = {
       const state = get(mainState);
       if (!state) return <Spinner />;
       return (
-        <YStack gap="$4" padding="$4">
-          <Button onPress={navigate('control/live')}>Live</Button>
-          <Button onPress={navigate('control/ready')}>Ready</Button>
-          <Button
-            onPress={() => {
-              mainStateUpdate((state) => ({
-                ...state,
-                transitionState: {
-                  ...state.transitionState,
-                  autoStartTime: Date.now(),
-                },
-              }));
-            }}
-            disabled={state.transitionState.manual !== null}
-            icon={<LucideIcon icon="PlayCircle" />}
-          >
-            Start Transition
-          </Button>
-          <EditTransition
-            transition={state.transition}
-            onTransition={(update) => mainStateUpdate((state) => ({ ...state, transition: update(state.transition) }))}
-          />
-          <AutoTransitionProgress transitionState={state.transitionState} transition={state.transition} />
-          {/* <YStack width="100%" aspectRatio={1} backgroundColor="red">
+        <>
+          <YStack gap="$4" padding="$4">
+            <Button onPress={navigate('control/live')}>Live: {getScreenTitle(state.liveScene, ['live'])}</Button>
+            <Button onPress={navigate('control/ready')}>Ready: {getScreenTitle(state.readyScene, ['ready'])}</Button>
+            <Button
+              onPress={() => {
+                mainStateUpdate((state) => ({
+                  ...state,
+                  transitionState: {
+                    ...state.transitionState,
+                    autoStartTime: Date.now(),
+                  },
+                }));
+              }}
+              disabled={state.transitionState.manual !== null}
+              icon={<LucideIcon icon="PlayCircle" />}
+            >
+              Start Transition
+            </Button>
+            <EditTransition
+              transition={state.transition}
+              onTransition={(update) =>
+                mainStateUpdate((state) => ({ ...state, transition: update(state.transition) }))
+              }
+            />
+            <AutoTransitionProgress transitionState={state.transitionState} transition={state.transition} />
+            {/* <YStack width="100%" aspectRatio={1} backgroundColor="red">
         <WebView
           style={{ flex: 1, backgroundColor: 'white', pointerEvents: 'none' }}
           source={{ uri: 'http://localhost:3000/eg-live' }}
         />
       </YStack> */}
-          {/* <Text>{JSON.stringify(get(mainState))}</Text> */}
-          <Button onPress={navigate('browse_videos')}>Browse scene</Button>
-          <Button onPress={navigate('browse_media')}>Browse Library</Button>
-        </YStack>
+            {/* <Text>{JSON.stringify(get(mainState))}</Text> */}
+          </YStack>
+          <Section title="Library">
+            <Button icon={<LucideIcon icon="Library" />} onPress={navigate('browse_videos')}>
+              Media
+            </Button>
+            <Button icon={<LucideIcon icon="Library" />} onPress={navigate('browse_media')}>
+              Scenes
+            </Button>
+          </Section>
+        </>
       );
     },
     { compare: isEqual }
@@ -105,6 +120,17 @@ export const models = {
       return (
         <YStack gap="$4" padding="$4">
           {media?.files?.map((file) => <Button onPress={() => {}}>{file.title}</Button>)}
+        </YStack>
+      );
+    },
+    { compare: isEqual }
+  ),
+  browse_media: view(
+    (get) => {
+      const lib = get(libraryIndex);
+      return (
+        <YStack gap="$4" padding="$4">
+          {lib?.map((file) => <Button onPress={() => {}}>{file}</Button>)}
         </YStack>
       );
     },
@@ -302,15 +328,20 @@ function SceneScreen({
   }
   return (
     <>
-      <StackScreen title={getScreenTitle(controlPath)} headerBackTitle={' '} />
+      <StackScreen title={getScreenTitle(scene, controlPath)} headerBackTitle={' '} />
       {screen}
     </>
   );
 }
-function getScreenTitle(controlPath: string[]): string {
+function getScreenTitle(scene: Scene | null | undefined, controlPath: string[]): string {
+  if (scene?.label) return scene.label;
+  if (scene?.type === 'video') return 'Video';
+  if (scene?.type === 'color') return 'Color';
+  if (scene?.type === 'layers') return 'Layers';
+  if (scene?.type === 'sequence') return 'Sequence';
   const last = controlPath[controlPath.length - 1];
   const restPath = controlPath.slice(0, -1);
-  if (last === 'effects') return `Effects: ${getScreenTitle(restPath)}`;
+  // if (last === 'effects') return `Effects: ${getScreenTitle(restPath)}`;
   if (last === 'live') return 'Live';
   if (last === 'ready') return 'Ready';
   return '?';
@@ -329,7 +360,7 @@ function EffectsScreen({
   if (scene.type !== 'video') return <SizableText>Effects only available on video scenes</SizableText>;
   return (
     <YStack flex={1}>
-      <StackScreen title={getScreenTitle(controlPath)} headerBackTitle={' '} />
+      <StackScreen title={`Fx: ${getScreenTitle(scene, controlPath)}`} headerBackTitle={' '} />
       <DraggableFlatList
         style={{ height: '100%' }}
         data={
@@ -445,7 +476,7 @@ function EffectScreen({
   }
   return (
     <YStack flex={1} padding="$4" gap="$4">
-      <StackScreen title={getScreenTitle(controlPath)} headerBackTitle={' '} />
+      <StackScreen title={`Fx: ${getScreenTitle(scene, controlPath)}`} headerBackTitle={' '} />
       {controls}
       <Button
         onPress={() => {
@@ -767,8 +798,13 @@ function SequenceScreen({
         data={
           scene?.sequence?.map((item) => ({
             label: (
-              <Button marginHorizontal="$4" marginVertical="$1" disabled>
-                {item.key}
+              <Button
+                marginHorizontal="$4"
+                marginVertical="$1"
+                backgroundColor={scene.activeKey === item.key ? '$green4' : undefined}
+                disabled
+              >
+                {getScreenTitle(item.scene, [...controlPath, `item_${item.key}`])}
               </Button>
             ),
             key: item.key,
@@ -824,11 +860,50 @@ function SequenceScreen({
             </Button>
             <NewSequenceItem controlPath={controlPath} onScene={onScene} />
             {extraControls}
+            <GenericSceneControls controlPath={controlPath} scene={scene} onScene={onScene} />
             <ResetSceneButton controlPath={controlPath} scene={scene} onScene={onScene} />
           </YStack>
         }
       />
     </YStack>
+  );
+}
+
+function GenericSceneControls({
+  controlPath,
+  scene,
+  onScene,
+}: {
+  controlPath: string[];
+  scene: Scene;
+  onScene: (update: (m: Scene) => Scene) => void;
+}) {
+  return (
+    <>
+      <BottomSheet
+        trigger={<BottomSheetTriggerButton icon={<LucideIcon icon="Tag" />}>Rename Scene</BottomSheetTriggerButton>}
+      >
+        <YStack flex={1}>
+          <RiseForm
+            onSubmit={(fields) => {
+              onScene((s) => ({ ...s, label: fields.label }));
+            }}
+          >
+            <InputField label="Scene Name" id="label" defaultValue={scene.label} />
+            <SubmitButton>Save Label</SubmitButton>
+          </RiseForm>
+        </YStack>
+      </BottomSheet>
+      <Button
+        icon={<LucideIcon icon="Download" />}
+        onPress={async () => {
+          await writeLibraryItem(scene);
+          return response(toast('Saved to Library'));
+        }}
+      >
+        Save to Library
+      </Button>
+    </>
   );
 }
 
@@ -855,9 +930,17 @@ function ColorScreen({
       <EffectSlider label="Saturation" value={scene.s} onValueChange={(v) => onScene((s) => ({ ...s, s: v }))} />
       <EffectSlider label="Brightness" value={scene.l} onValueChange={(v) => onScene((s) => ({ ...s, l: v }))} />
       {extraControls}
+      <GenericSceneControls controlPath={controlPath} scene={scene} onScene={onScene} />
       <ResetSceneButton controlPath={controlPath} scene={scene} onScene={onScene} />
     </YStack>
   );
+}
+
+function iconOfBlendMode(blendMode: 'add' | 'mix' | 'mask') {
+  if (blendMode === 'add') return <LucideIcon icon="PlusCircle" />;
+  if (blendMode === 'mix') return <LucideIcon icon="Blend" />;
+  if (blendMode === 'mask') return <LucideIcon icon="Eclipse" />;
+  return <LucideIcon icon="Blend" />;
 }
 
 function LayersScreen({
@@ -871,15 +954,16 @@ function LayersScreen({
   controlPath: string[];
   extraControls?: any;
 }) {
+  const layers = [...(scene.layers || [])].reverse();
   return (
     <YStack>
       <DraggableFlatList
         style={{ height: '100%' }}
         data={
-          scene?.layers?.map((layer) => ({
+          layers?.map((layer) => ({
             label: (
-              <Button marginHorizontal="$4" marginVertical="$1" disabled>
-                {layer.key}
+              <Button marginHorizontal="$4" marginVertical="$1" disabled icon={iconOfBlendMode(layer.blendMode)}>
+                {getScreenTitle(layer.scene, [...controlPath, `layer_${layer.key}`])}
               </Button>
             ),
             key: layer.key,
@@ -894,6 +978,7 @@ function LayersScreen({
           <YStack gap="$4" padding="$4">
             <NewLayerButton controlPath={controlPath} onScene={onScene} />
             {extraControls}
+            <GenericSceneControls controlPath={controlPath} scene={scene} onScene={onScene} />
             <ResetSceneButton controlPath={controlPath} scene={scene} onScene={onScene} />
           </YStack>
         }
@@ -1026,31 +1111,38 @@ function VideoScreen({
   extraControls?: any;
 }) {
   return (
-    <YStack>
-      {index?.files ? (
-        <SelectDropdown
-          emptyLabel="Select a video track"
-          value={scene?.track}
-          options={index?.files.map((file) => ({ key: file.fileSha256, label: file.title }))}
-          onSelect={(key) => {
-            onScene(() => ({ ...scene, track: key, label: index.files.find((f) => f.fileSha256 === key)?.title }));
+    <>
+      <YStack marginVertical="$4" marginHorizontal="$4" gap="$4">
+        {index?.files ? (
+          <SelectDropdown
+            emptyLabel="Select a video track"
+            value={scene?.track}
+            options={index?.files.map((file) => ({ key: file.fileSha256, label: file.title }))}
+            onSelect={(key) => {
+              onScene(() => ({ ...scene, track: key, label: index.files.find((f) => f.fileSha256 === key)?.title }));
+            }}
+          />
+        ) : null}
+        <Button
+          onPress={() => {
+            const player = mainVideo.getPlayer(scene.id);
+            player?.restart();
           }}
-        />
-      ) : null}
-      <Button
-        onPress={() => {
-          const player = mainVideo.getPlayer(scene.id);
-          player?.restart();
-        }}
-      >
-        Restart Video
-      </Button>
-      {/* <Text>{JSON.stringify(scene)}</Text> */}
-      {/* <Text>{JSON.stringify(index?.files)}</Text> */}
-      <EffectsButton controlPath={controlPath} />
+        >
+          Restart Video
+        </Button>
+        {/* <Text>{JSON.stringify(scene)}</Text> */}
+        {/* <Text>{JSON.stringify(index?.files)}</Text> */}
+        <EffectsButton controlPath={controlPath} />
+      </YStack>
+
       {extraControls}
-      <ResetSceneButton controlPath={controlPath} scene={scene} onScene={onScene} />
-    </YStack>
+      <Separator marginBottom="$4" />
+      <YStack marginHorizontal="$4" gap="$4">
+        <GenericSceneControls controlPath={controlPath} scene={scene} onScene={onScene} />
+        <ResetSceneButton controlPath={controlPath} scene={scene} onScene={onScene} />
+      </YStack>
+    </>
   );
 }
 
@@ -1112,6 +1204,7 @@ function EditTransition({
           min={0}
           step={10}
           max={15_000}
+          smoothing={0.5}
           onValueChange={(v) => onTransition((t) => ({ ...t, duration: v }))}
           size={50}
         />

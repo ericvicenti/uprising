@@ -1453,45 +1453,6 @@ function matchActiveScene(
 //   return false;
 // }
 
-function goNext(controlPath: string[]) {
-  // rootSceneUpdate(controlPath, (media) => {
-  //   if (media.type !== "sequence") {
-  //     console.warn("goNext on non-sequence media", media);
-  //     return media;
-  //   }
-  //   if (!media.sequence.length) return media;
-  //   const active = getSequenceActiveItem(media);
-  //   if (!active) {
-  //     console.warn("goNext: active media not identified");
-  //     return media;
-  //   }
-  //   const activeIndex = media.sequence.findIndex(
-  //     (item) => item.key === active.key
-  //   );
-  //   if (activeIndex === -1) {
-  //     console.warn("goNext: active media not found in sequence");
-  //     return media;
-  //   }
-  //   const nextIndex = (activeIndex + 1) % media.sequence.length;
-  //   const nextKey = media.sequence[nextIndex]?.key;
-  //   if (!nextKey) {
-  //     console.warn("goNext: next media not identified");
-  //     return media;
-  //   }
-  //   let transitionDuration = 0;
-  //   if (media.transition?.duration) {
-  //     transitionDuration = media.transition.duration;
-  //   }
-  //   const now = Date.now();
-  //   return {
-  //     ...media,
-  //     nextActiveKey: nextKey,
-  //     transitionEndTime: now + transitionDuration,
-  //     transitionStartTime: now,
-  //   };
-  // });
-}
-
 // const SliderGrabDelta = 0.01;
 
 // let midiManualTransitionDebounceTimeout: NodeJS.Timeout | undefined = undefined;
@@ -1591,27 +1552,3 @@ subscribeMidiEvents((event) => {
 //     updateSliderValue(field, value);
 //   }, 150);
 // }
-
-function createBlankScene(type: Media['type']): Media {
-  if (type === 'off') {
-    return { type };
-  }
-  if (type === 'color') {
-    return { type, h: 0, s: 1, l: 1 };
-  }
-  if (type === 'video') {
-    return { type, track: null, id: randomUUID() };
-  }
-  if (type === 'layers') {
-    return { type, layers: [] };
-  }
-  if (type === 'sequence') {
-    return {
-      type,
-      sequence: [],
-      transition: { type: 'fade', duration: 1000, mode: 'mix' },
-    };
-  }
-
-  return { type: 'off' };
-}
