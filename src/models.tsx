@@ -763,6 +763,7 @@ function EffectSlider({
         max={max == undefined ? 1 : max}
         onValueChange={(v) => onValueChange(v)}
         size={50}
+        smoothing={0.5}
       />
       {/* <Slider
         value={[value]}

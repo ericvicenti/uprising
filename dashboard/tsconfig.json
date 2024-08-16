@@ -1,42 +1,33 @@
 {
   "compilerOptions": {
-    "target": "es5",
-    "lib": [
-      "dom",
-      "dom.iterable",
-      "esnext"
-    ],
-    "baseUrl": ".",
-    "paths": {
-      "react-native": [
-        "react-native-web"
-      ]
-    },
-    "allowJs": true,
-    "skipLibCheck": true,
-    "strict": true,
+    "importHelpers": true,
+    "allowSyntheticDefaultImports": true,
     "forceConsistentCasingInFileNames": true,
-    "noEmit": true,
+    "declaration": true,
+    "downlevelIteration": true,
+    "strict": true,
     "esModuleInterop": true,
-    "module": "esnext",
+    "inlineSourceMap": true,
+    "preserveSymlinks": true,
+    "jsx": "react-jsx",
+    "module": "system",
     "moduleResolution": "node",
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "jsx": "preserve",
-    "incremental": true,
-    "plugins": [
-      {
-        "name": "next"
-      }
-    ]
+    "noEmitOnError": false,
+    "noImplicitAny": false,
+    "noImplicitReturns": false,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "preserveConstEnums": true,
+    "removeComments": false,
+    "skipLibCheck": true,
+    "sourceMap": false,
+    "strictNullChecks": true,
+    "target": "es2020",
+    "types": ["node", "react"],
+    "lib": ["dom", "esnext"],
   },
-  "include": [
-    "next-env.d.ts",
-    "**/*.ts",
-    "**/*.tsx",
-    ".next/types/**/*.ts"
-  ],
-  "exclude": [
-    "node_modules"
-  ]
+  "exclude": ["test", "dist", "types", "**/__tests__"],
+  "typeAcquisition": {
+    "enable": true
+  },
 }

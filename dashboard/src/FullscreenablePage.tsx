@@ -1,10 +1,7 @@
-import { PropsWithChildren } from 'react'
-import { View } from 'tamagui'
+import { PropsWithChildren } from 'react';
+import { View } from 'tamagui';
 
-export function FullscreenablePage({
-  children,
-  corner,
-}: PropsWithChildren<{ corner?: React.ReactNode }>) {
+export function FullscreenablePage({ children, corner }: PropsWithChildren<{ corner?: React.ReactNode }>) {
   return (
     <View
       fd="row"
@@ -14,7 +11,7 @@ export function FullscreenablePage({
       f={1}
       height="100%"
       onPress={() => {
-        toggleFullScreen()
+        toggleFullScreen();
       }}
     >
       {children}
@@ -24,62 +21,62 @@ export function FullscreenablePage({
         </View>
       )}
     </View>
-  )
+  );
 }
 
 function toggleFullScreen() {
   if (!document.fullscreenElement) {
     // If not in fullscreen, request it on the 'content' div
-    const elem = document.getElementById('__next')!
+    const elem = document.getElementById('root')!;
     if (elem.requestFullscreen) {
-      elem.requestFullscreen()
+      elem.requestFullscreen();
     } else if (
       // @ts-expect-error
       elem.mozRequestFullScreen
     ) {
       /* Firefox */
       // @ts-expect-error
-      elem.mozRequestFullScreen()
+      elem.mozRequestFullScreen();
     } else if (
       // @ts-expect-error
       elem.webkitRequestFullscreen
     ) {
       /* Chrome, Safari & Opera */
       // @ts-expect-error
-      elem.webkitRequestFullscreen()
+      elem.webkitRequestFullscreen();
     } else if (
       // @ts-expect-error
       elem.msRequestFullscreen
     ) {
       /* IE/Edge */
       // @ts-expect-error
-      elem.msRequestFullscreen()
+      elem.msRequestFullscreen();
     }
   } else {
     // If in fullscreen, exit it
     if (document.exitFullscreen) {
-      document.exitFullscreen()
+      document.exitFullscreen();
     } else if (
       // @ts-expect-error
       document.mozCancelFullScreen
     ) {
       /* Firefox */
       // @ts-expect-error
-      document.mozCancelFullScreen()
+      document.mozCancelFullScreen();
     } else if (
       // @ts-expect-error
       document.webkitExitFullscreen
     ) {
       /* Chrome, Safari and Opera */
       // @ts-expect-error
-      document.webkitExitFullscreen()
+      document.webkitExitFullscreen();
     } else if (
       // @ts-expect-error
       document.msExitFullscreen
     ) {
       /* IE/Edge */
       // @ts-expect-error
-      document.msExitFullscreen()
+      document.msExitFullscreen();
     }
   }
 }
