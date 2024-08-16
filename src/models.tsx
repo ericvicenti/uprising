@@ -14,6 +14,7 @@ import {
   RiseForm,
   ScrollView,
   Separator,
+  SheetScrollView,
   SizableText,
   Slider,
   SliderThumb,
@@ -54,6 +55,7 @@ import {
   Layer,
   ColorScene,
   SequenceItem,
+  OffScene,
 } from './state-schema';
 import { LucideIcon } from '@rise-tools/kitchen-sink/server';
 import { mainVideo } from './eg-video-playback';
@@ -74,8 +76,18 @@ export const models = {
       return (
         <>
           <YStack gap="$4" padding="$4">
-            <Button onPress={navigate('control/live')}>Live: {getScreenTitle(state.liveScene, ['live'])}</Button>
-            <Button onPress={navigate('control/ready')}>Ready: {getScreenTitle(state.readyScene, ['ready'])}</Button>
+            <XStack gap="$1">
+              <Button flex={1} onPress={navigate('control/live')}>
+                Live: {getScreenTitle(state.liveScene, ['live'])}
+              </Button>
+              <Button chromeless icon={<LucideIcon icon="LayoutDashboard" />} onPress={navigate('dashboard/live')} />
+            </XStack>
+            <XStack gap="$1">
+              <Button flex={1} onPress={navigate('control/ready')}>
+                Ready: {getScreenTitle(state.readyScene, ['ready'])}
+              </Button>
+              <Button chromeless icon={<LucideIcon icon="LayoutDashboard" />} onPress={navigate('dashboard/ready')} />
+            </XStack>
             <Button
               onPress={() => {
                 mainStateUpdate((state) => ({
@@ -119,6 +131,13 @@ export const models = {
     },
     { compare: isEqual }
   ),
+  dashboard: lookup((dashboardKey) => {
+    return view((get) => (
+      <ScrollView>
+        <StackScreen title={dashboardKey} headerBackTitle={' '} />
+      </ScrollView>
+    ));
+  }),
   browse_videos: view(
     (get) => {
       const media = get(mediaIndex);
@@ -147,7 +166,7 @@ export const models = {
       const lib = get(libraryIndex);
       const media = get(mediaIndex);
       return (
-        <ScrollView>
+        <SheetScrollView>
           <YStack>
             <Section title="Media">
               {media?.files?.map((file) => (
@@ -197,7 +216,7 @@ export const models = {
               ))}
             </Section>
           </YStack>
-        </ScrollView>
+        </SheetScrollView>
       );
     })
   ),
@@ -378,18 +397,11 @@ function SceneScreen({
   if (scene?.type === 'color') {
     screen = <ColorScreen scene={scene} onScene={onScene} controlPath={controlPath} extraControls={extraControls} />;
   }
+  if (scene?.type === 'off') {
+    screen = <OffScreen scene={scene} onScene={onScene} controlPath={controlPath} extraControls={extraControls} />;
+  }
   if (!screen) {
-    screen = (
-      <YStack>
-        <SelectDropdown
-          value={scene?.type || 'off'}
-          options={SceneTypes}
-          onSelect={(key) => {
-            onScene(() => createBlankScene(key));
-          }}
-        />
-      </YStack>
-    );
+    screen = <Text>Unknown Scene</Text>;
   }
   return (
     <>
@@ -404,6 +416,7 @@ function getScreenTitle(scene: Scene | null | undefined, controlPath: string[]):
   if (scene?.type === 'color') return 'Color';
   if (scene?.type === 'layers') return 'Layers';
   if (scene?.type === 'sequence') return 'Sequence';
+  if (scene?.type === 'off') return 'Off';
   const last = controlPath[controlPath.length - 1];
   const restPath = controlPath.slice(0, -1);
   // if (last === 'effects') return `Effects: ${getScreenTitle(restPath)}`;
@@ -723,7 +736,7 @@ function LayerControls({
   const blendMode = LayerMixOptions.find((o) => o.key === layer.blendMode);
   return (
     <Section title="Layer">
-      <SelectDropdown
+      {/* <SelectDropdown
         options={LayerMixOptions}
         onSelect={(value) => {
           if (!value) return;
@@ -736,8 +749,8 @@ function LayerControls({
           });
         }}
         value={layer.blendMode}
-      />
-      <EffectSlider
+      /> */}
+      {/* <GradientSlider
         label={`${blendMode?.label || 'Blend'} Amount`}
         value={layer.blendAmount}
         onValueChange={(v) => {
@@ -749,7 +762,7 @@ function LayerControls({
             };
           });
         }}
-      />
+      /> */}
       <Button
         icon={<LucideIcon icon="Trash" />}
         onPress={() => {
@@ -801,6 +814,52 @@ function Section({ title, children }: { title?: string; children: any }) {
       {title ? <Heading>{title}</Heading> : null}
       {children}
     </YStack>
+  );
+}
+
+function GradientSlider({
+  label,
+  value,
+  onValueChange,
+  step,
+  min,
+  max,
+}: {
+  label: string;
+  value: number;
+  onValueChange: (v: number) => void;
+  step?: number;
+  min?: number;
+  max?: number;
+}) {
+  return (
+    <>
+      <BottomSheet
+        trigger={
+          <BottomSheetTriggerButton chromeless justifyContent="flex-start">
+            {label}
+            {/* <XStack>
+              <Label>{label}</Label>
+            </XStack> */}
+          </BottomSheetTriggerButton>
+        }
+      >
+        <YStack flex={1}>
+          <Section title="Dashboard">
+            <Button>Add to Dashboard</Button>
+          </Section>
+        </YStack>
+      </BottomSheet>
+      <SmoothSlider
+        value={value}
+        min={min == undefined ? 0 : min}
+        step={step == undefined ? 0.01 : step}
+        max={max == undefined ? 1 : max}
+        onValueChange={(v) => onValueChange(v)}
+        size={50}
+        smoothing={0.5}
+      />
+    </>
   );
 }
 
@@ -875,12 +934,13 @@ function SequenceScreen({
               </Button>
             ),
             key: item.key,
-            onPress: navigate(`control/${controlPath.join(':')}:item_${item.key}`),
+            // onPress: navigate(`control/${controlPath.join(':')}:item_${item.key}`),
           })) || []
         }
         onReorder={(keyOrder) => {
           onScene((s) => ({ ...s, sequence: keyOrder.map((key) => scene.sequence?.find((e) => e.key === key)!) }));
         }}
+        onItemPress={(key) => response(navigate(`control/${controlPath.join(':')}:item_${key}`))}
         header={<View height="$2" />}
         footer={
           <YStack gap="$4" padding="$4">
@@ -948,20 +1008,20 @@ function GenericSceneControls({
   const labelId = `label-${controlPath.join(':')}`;
   return (
     <>
-      <BottomSheet
+      {/* <BottomSheet
         trigger={<BottomSheetTriggerButton icon={<LucideIcon icon="Tag" />}>Rename Scene</BottomSheetTriggerButton>}
-      >
-        <YStack flex={1}>
-          <RiseForm
-            onSubmit={(fields) => {
-              onScene((s) => ({ ...s, label: fields[labelId] }));
-            }}
-          >
-            <InputField label="Scene Name" id={labelId} defaultValue={scene.label} />
-            <SubmitButton>Save Label</SubmitButton>
-          </RiseForm>
-        </YStack>
-      </BottomSheet>
+      > */}
+      <YStack flex={1}>
+        <RiseForm
+          onSubmit={(fields) => {
+            onScene((s) => ({ ...s, label: fields[labelId] }));
+          }}
+        >
+          <InputField label="Scene Name" id={labelId} defaultValue={scene.label} />
+          <SubmitButton>Save Label</SubmitButton>
+        </RiseForm>
+      </YStack>
+      {/* </BottomSheet> */}
       <Button
         icon={<LucideIcon icon="Download" />}
         onPress={async () => {
@@ -1006,6 +1066,28 @@ function ColorScreen({
   );
 }
 
+function OffScreen({
+  scene,
+  onScene,
+  controlPath,
+  extraControls,
+}: {
+  scene: OffScene;
+  onScene: (update: (m: Scene) => Scene) => void;
+  controlPath: string[];
+  extraControls?: any;
+}) {
+  return (
+    <ScrollView>
+      <YStack gap="$4" padding="$4">
+        {extraControls}
+        <GenericSceneControls controlPath={controlPath} scene={scene} onScene={onScene} />
+        <ResetSceneButton controlPath={controlPath} scene={scene} onScene={onScene} />
+      </YStack>
+    </ScrollView>
+  );
+}
+
 function iconOfBlendMode(blendMode: 'add' | 'mix' | 'mask') {
   if (blendMode === 'add') return <LucideIcon icon="PlusCircle" />;
   if (blendMode === 'mix') return <LucideIcon icon="Blend" />;
@@ -1024,25 +1106,25 @@ function LayersScreen({
   controlPath: string[];
   extraControls?: any;
 }) {
-  const layers = [...(scene.layers || [])].reverse();
   return (
     <YStack>
       <DraggableFlatList
         style={{ height: '100%' }}
         data={
-          layers?.map((layer) => ({
+          scene.layers?.map((layer) => ({
             label: (
               <Button marginHorizontal="$4" marginVertical="$1" disabled icon={iconOfBlendMode(layer.blendMode)}>
                 {getScreenTitle(layer.scene, [...controlPath, `layer_${layer.key}`])}
               </Button>
             ),
             key: layer.key,
-            onPress: navigate(`control/${controlPath.join(':')}:layer_${layer.key}`),
+            // onPress: navigate(`control/${controlPath.join(':')}:layer_${layer.key}`),
           })) || []
         }
         onReorder={(keyOrder) => {
           onScene((s) => ({ ...s, layers: keyOrder.map((key) => scene.layers?.find((e) => e.key === key)!) }));
         }}
+        onItemPress={(key) => response(navigate(`control/${controlPath.join(':')}:layer_${key}`))}
         header={<View height="$2" />}
         footer={
           <YStack gap="$4" padding="$4">
