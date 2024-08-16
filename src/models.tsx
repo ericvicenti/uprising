@@ -7,6 +7,7 @@ import {
   DraggableFlatList,
   Group,
   GroupItem,
+  H5,
   Heading,
   InputField,
   Label,
@@ -20,6 +21,10 @@ import {
   SliderTrackActive,
   Spinner,
   SubmitButton,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTab,
   Text,
   toast,
   View,
@@ -28,7 +33,7 @@ import {
 } from '@rise-tools/kitchen-sink/server';
 import { AnimatedProgress, SmoothSlider } from '@rise-tools/kit/server';
 import { randomUUID } from 'crypto';
-import { ModelState, response } from '@rise-tools/react';
+import { localStateExperimental, ModelState, ref, response } from '@rise-tools/react';
 import { lookup, view } from '@rise-tools/server';
 import { MediaIndex, mediaIndex } from './media';
 import { createBlankEffect, createBlankScene, mainState, mainStateUpdate, sceneState, updateScene } from './state';
@@ -54,7 +59,7 @@ import { LucideIcon } from '@rise-tools/kitchen-sink/server';
 import { mainVideo } from './eg-video-playback';
 import { hslToHex } from './color';
 import { getSequenceActiveItem } from './eg-main';
-import { libraryIndex, writeLibraryItem } from './library';
+import { getLibraryItem, libraryIndex, writeLibraryItem } from './library';
 // import { isEqual } from 'lodash';
 
 function isEqual(a: any, b: any) {
@@ -135,6 +140,66 @@ export const models = {
       );
     },
     { compare: isEqual }
+  ),
+  reset_scene: lookup((scenePathStr) =>
+    view((get) => {
+      const scenePath = scenePathStr.split(':');
+      const lib = get(libraryIndex);
+      const media = get(mediaIndex);
+      return (
+        <ScrollView>
+          <YStack>
+            <Section title="Media">
+              {media?.files?.map((file) => (
+                <BottomSheetCloseButton
+                  key={`media-${file.fileSha256}`}
+                  onPress={() => {
+                    updateScene(scenePath, () => ({
+                      ...createBlankScene('video'),
+                      track: file.fileSha256,
+                      label: file.title,
+                    }));
+                  }}
+                >
+                  {file.title}
+                </BottomSheetCloseButton>
+              ))}
+            </Section>
+            <Section title="Library">
+              {lib?.map((libraryItem) => (
+                <BottomSheetCloseButton
+                  key={`lib-${libraryItem}`}
+                  onPress={() => {
+                    getLibraryItem(libraryItem)
+                      .then((scene) => {
+                        updateScene(scenePath, () => scene);
+                      })
+                      .catch((e) => {
+                        console.error('Failed to load library item ' + libraryItem);
+                        console.error(e);
+                      });
+                  }}
+                >
+                  {libraryItem}
+                </BottomSheetCloseButton>
+              ))}
+            </Section>
+            <Section title="New Scene">
+              {SceneTypes.map(({ key, label }) => (
+                <BottomSheetCloseButton
+                  key={`new-${key}`}
+                  onPress={() => {
+                    updateScene(scenePath, () => createBlankScene(key));
+                  }}
+                >
+                  {label}
+                </BottomSheetCloseButton>
+              ))}
+            </Section>
+          </YStack>
+        </ScrollView>
+      );
+    })
   ),
   control: lookup((controlPath) => {
     const path = controlPath.split(':');
@@ -418,6 +483,7 @@ function NewEffectButton({
       <YStack gap="$3">
         {EffectTypes.map(({ key, label }) => (
           <BottomSheetCloseButton
+            key={key}
             onPress={() => {
               const newEffect = createBlankEffect(key);
               onScene((scene) => {
@@ -879,6 +945,7 @@ function GenericSceneControls({
   scene: Scene;
   onScene: (update: (m: Scene) => Scene) => void;
 }) {
+  const labelId = `label-${controlPath.join(':')}`;
   return (
     <>
       <BottomSheet
@@ -887,10 +954,10 @@ function GenericSceneControls({
         <YStack flex={1}>
           <RiseForm
             onSubmit={(fields) => {
-              onScene((s) => ({ ...s, label: fields.label }));
+              onScene((s) => ({ ...s, label: fields[labelId] }));
             }}
           >
-            <InputField label="Scene Name" id="label" defaultValue={scene.label} />
+            <InputField label="Scene Name" id={labelId} defaultValue={scene.label} />
             <SubmitButton>Save Label</SubmitButton>
           </RiseForm>
         </YStack>
@@ -920,20 +987,22 @@ function ColorScreen({
   extraControls?: any;
 }) {
   return (
-    <YStack gap="$4" padding="$4">
-      <EffectSlider
-        label="Hue"
-        value={scene.h}
-        onValueChange={(v) => onScene((s) => ({ ...s, h: v }))}
-        max={360}
-        step={1}
-      />
-      <EffectSlider label="Saturation" value={scene.s} onValueChange={(v) => onScene((s) => ({ ...s, s: v }))} />
-      <EffectSlider label="Brightness" value={scene.l} onValueChange={(v) => onScene((s) => ({ ...s, l: v }))} />
-      {extraControls}
-      <GenericSceneControls controlPath={controlPath} scene={scene} onScene={onScene} />
-      <ResetSceneButton controlPath={controlPath} scene={scene} onScene={onScene} />
-    </YStack>
+    <ScrollView>
+      <YStack gap="$4" padding="$4">
+        <EffectSlider
+          label="Hue"
+          value={scene.h}
+          onValueChange={(v) => onScene((s) => ({ ...s, h: v }))}
+          max={360}
+          step={1}
+        />
+        <EffectSlider label="Saturation" value={scene.s} onValueChange={(v) => onScene((s) => ({ ...s, s: v }))} />
+        <EffectSlider label="Brightness" value={scene.l} onValueChange={(v) => onScene((s) => ({ ...s, l: v }))} />
+        {extraControls}
+        <GenericSceneControls controlPath={controlPath} scene={scene} onScene={onScene} />
+        <ResetSceneButton controlPath={controlPath} scene={scene} onScene={onScene} />
+      </YStack>
+    </ScrollView>
   );
 }
 
@@ -1086,6 +1155,18 @@ function ResetSceneButton({
   onScene: (update: (m: Scene) => Scene) => void;
 }) {
   return (
+    <BottomSheet
+      trigger={
+        <BottomSheetTriggerButton icon={<LucideIcon icon="UndoDot" />} theme="red">
+          Reset Scene
+        </BottomSheetTriggerButton>
+      }
+    >
+      {ref('reset_scene/' + controlPath.join(':'))}
+    </BottomSheet>
+  );
+
+  return (
     <SelectDropdown
       value={scene?.type || 'off'}
       options={SceneTypes}
@@ -1112,7 +1193,7 @@ function VideoScreen({
   extraControls?: any;
 }) {
   return (
-    <>
+    <ScrollView>
       <YStack marginVertical="$4" marginHorizontal="$4" gap="$4">
         {index?.files ? (
           <SelectDropdown
@@ -1143,7 +1224,7 @@ function VideoScreen({
         <GenericSceneControls controlPath={controlPath} scene={scene} onScene={onScene} />
         <ResetSceneButton controlPath={controlPath} scene={scene} onScene={onScene} />
       </YStack>
-    </>
+    </ScrollView>
   );
 }
 
