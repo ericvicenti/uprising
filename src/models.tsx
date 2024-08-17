@@ -37,7 +37,15 @@ import { randomUUID } from 'crypto';
 import { createComponentDefinition, localStateExperimental, ModelState, ref, response } from '@rise-tools/react';
 import { lookup, view } from '@rise-tools/server';
 import { MediaIndex, mediaIndex } from './media';
-import { createBlankEffect, createBlankScene, mainState, mainStateUpdate, sceneState, updateScene } from './state';
+import {
+  createBlankEffect,
+  createBlankScene,
+  mainState,
+  mainStateUpdate,
+  sceneState,
+  sliderFields,
+  updateScene,
+} from './state';
 import {
   Scene,
   Transition,
@@ -56,6 +64,7 @@ import {
   ColorScene,
   SequenceItem,
   OffScene,
+  SliderFields,
 } from './state-schema';
 import { LucideIcon } from '@rise-tools/kitchen-sink/server';
 import { mainVideo } from './eg-video-playback';
@@ -193,6 +202,7 @@ export const models = {
                   onPress={() => {
                     getLibraryItem(libraryItem)
                       .then((scene) => {
+                        // todo: if scenePath === ['live'] or ['ready'] then update the dashboard and sliderFields
                         updateScene(scenePath, () => scene);
                       })
                       .catch((e) => {
@@ -226,6 +236,7 @@ export const models = {
     const path = controlPath.split(':');
     const { scenePath, restPath } = unpackControlPath(path);
     const scene = sceneState.get(scenePath.join(':'));
+    const sliderFieldsModel = sliderFields.get(path[0]);
     if (restPath[0] === 'effects') {
       if (restPath[1]) {
         const effectId = restPath[1].split('_')[1];
@@ -238,6 +249,7 @@ export const models = {
               onScene={(updater) => {
                 updateScene(scenePath, updater);
               }}
+              sliderFields={sliderFieldsModel ? get(sliderFieldsModel) : undefined}
             />
           ),
           { compare: isEqual }
@@ -269,11 +281,14 @@ export const models = {
           const layersPath = path.slice(0, -1);
           const layersSceneModel = sceneState.get(layersPath.join(':'));
           const layersScene = layersSceneModel ? get(layersSceneModel) : null;
+          const sliderFieldsModel = sliderFields.get(path[0]);
           if (layersScene?.type === 'layers' && layerKey) {
             extraControls = (
               <LayerControls
                 layersScene={layersScene}
                 layerKey={layerKey}
+                scenePath={layersPath}
+                sliderFields={sliderFieldsModel ? get(sliderFieldsModel) : undefined}
                 onScene={(updater) => {
                   updateScene(layersPath, updater);
                 }}
@@ -298,10 +313,12 @@ export const models = {
             );
           }
         }
+        const sliderFieldsModel = sliderFields.get(path[0]);
         return (
           <SceneScreen
             scene={scene ? get(scene) : null}
             extraControls={extraControls}
+            sliderFields={sliderFieldsModel ? get(sliderFieldsModel) : undefined}
             onScene={(updater) => {
               updateScene(scenePath, updater);
             }}
@@ -379,36 +396,31 @@ function SceneScreen({
   controlPath,
   extraControls,
   onGetMediaIndex,
+  sliderFields,
 }: {
   scene: Scene | null | undefined;
   onScene: (update: (s: Scene) => Scene) => void;
   controlPath: string[];
-  extraControls?: ReactElement;
+  extraControls?: JSX.Element | null | undefined;
   onGetMediaIndex: () => MediaIndex | undefined;
+  sliderFields?: SliderFields;
 }) {
   let screen = null;
+  const screenProps = { onScene, controlPath, extraControls, onGetMediaIndex, sliderFields };
   if (scene?.type === 'video') {
-    screen = (
-      <VideoScreen
-        scene={scene}
-        onScene={onScene}
-        controlPath={controlPath}
-        index={onGetMediaIndex()}
-        extraControls={extraControls}
-      />
-    );
+    screen = <VideoScreen scene={scene} {...screenProps} />;
   }
   if (scene?.type === 'sequence') {
-    screen = <SequenceScreen scene={scene} onScene={onScene} controlPath={controlPath} extraControls={extraControls} />;
+    screen = <SequenceScreen scene={scene} {...screenProps} />;
   }
   if (scene?.type === 'layers') {
-    screen = <LayersScreen scene={scene} onScene={onScene} controlPath={controlPath} extraControls={extraControls} />;
+    screen = <LayersScreen scene={scene} {...screenProps} />;
   }
   if (scene?.type === 'color') {
-    screen = <ColorScreen scene={scene} onScene={onScene} controlPath={controlPath} extraControls={extraControls} />;
+    screen = <ColorScreen scene={scene} {...screenProps} />;
   }
   if (scene?.type === 'off') {
-    screen = <OffScreen scene={scene} onScene={onScene} controlPath={controlPath} extraControls={extraControls} />;
+    screen = <OffScreen scene={scene} {...screenProps} />;
   }
   if (!screen) {
     screen = <Text>Unknown Scene</Text>;
@@ -420,6 +432,16 @@ function SceneScreen({
     </>
   );
 }
+
+type SceneScreenProps<SceneType> = {
+  scene: SceneType;
+  onScene: (update: (m: Scene) => Scene) => void;
+  controlPath: string[];
+  extraControls?: JSX.Element | null | undefined;
+  onGetMediaIndex: () => MediaIndex | undefined;
+  sliderFields?: SliderFields;
+};
+
 function getScreenTitle(scene: Scene | null | undefined, controlPath: string[]): string {
   if (scene?.label) return scene.label;
   if (scene?.type === 'video') return 'Video';
@@ -529,11 +551,13 @@ function EffectScreen({
   onScene,
   controlPath,
   effectId,
+  sliderFields,
 }: {
   scene?: Scene | null;
   onScene: (update: (m: Scene) => Scene) => void;
   controlPath: string[];
   effectId: string;
+  sliderFields?: SliderFields;
 }) {
   if (!scene) return <SizableText>No Scene</SizableText>;
   if (scene.type !== 'video') return <SizableText>Effects only available on video scenes</SizableText>;
@@ -545,23 +569,29 @@ function EffectScreen({
       return { ...scene, effects: (scene.effects || []).map((e) => (e.key === effectId ? update(e) : e)) };
     });
   }
+  const effectProps = {
+    onEffect,
+    sliderFields,
+    onSliderFields: getSliderFieldUpdater(controlPath),
+    scenePath: controlPath.slice(0, -2),
+  };
   if (effect?.type === 'brighten') {
-    controls = <EffectBrightenControls effect={effect} onEffect={onEffect} />;
+    controls = <EffectBrightenControls effect={effect} {...effectProps} />;
   }
   if (effect?.type === 'darken') {
-    controls = <EffectDarkenControls effect={effect} onEffect={onEffect} />;
+    controls = <EffectDarkenControls effect={effect} {...effectProps} />;
   }
   if (effect?.type === 'desaturate') {
-    controls = <EffectDesaturateControls effect={effect} onEffect={onEffect} />;
+    controls = <EffectDesaturateControls effect={effect} {...effectProps} />;
   }
   if (effect?.type === 'rotate') {
-    controls = <EffectRotateControls effect={effect} onEffect={onEffect} />;
+    controls = <EffectRotateControls effect={effect} {...effectProps} />;
   }
   if (effect?.type === 'hueShift') {
-    controls = <EffectHueShiftControls effect={effect} onEffect={onEffect} />;
+    controls = <EffectHueShiftControls effect={effect} {...effectProps} />;
   }
   if (effect?.type === 'colorize') {
-    controls = <EffectColorizeControls effect={effect} onEffect={onEffect} />;
+    controls = <EffectColorizeControls effect={effect} {...effectProps} />;
   }
   return (
     <YStack flex={1} padding="$4" gap="$4">
@@ -583,19 +613,30 @@ function EffectScreen({
   );
 }
 
+type EffectControlsProps<EffectType> = {
+  effect: EffectType;
+  onEffect: (update: (e: Effect) => Effect) => void;
+  sliderFields?: SliderFields;
+  onSliderFields: (update: (m: SliderFields) => SliderFields) => void;
+  scenePath: string[];
+};
+
 function EffectBrightenControls({
   effect,
   onEffect,
-}: {
-  effect: BrightenEffect;
-  onEffect: (update: (e: Effect) => Effect) => void;
-}) {
+  sliderFields,
+  onSliderFields,
+  scenePath,
+}: EffectControlsProps<BrightenEffect>) {
   return (
     <YStack>
-      <EffectSlider
-        label="Brightness"
+      <GradientSlider
+        label="Brighten Amount"
         value={effect.value}
+        sliderKey={getSliderKey(scenePath, `effects:${effect.key}:value`)}
         onValueChange={(v) => onEffect((e) => ({ ...e, value: v }))}
+        sliderFields={sliderFields}
+        onSliderFields={onSliderFields}
       />
     </YStack>
   );
@@ -604,16 +645,19 @@ function EffectBrightenControls({
 function EffectDarkenControls({
   effect,
   onEffect,
-}: {
-  effect: DarkenEffect;
-  onEffect: (update: (e: Effect) => Effect) => void;
-}) {
+  sliderFields,
+  onSliderFields,
+  scenePath,
+}: EffectControlsProps<DarkenEffect>) {
   return (
     <YStack>
-      <EffectSlider
-        label="Darkness"
+      <GradientSlider
+        label="Darken Amount"
         value={effect.value}
+        sliderKey={getSliderKey(scenePath, `effects:${effect.key}:value`)}
         onValueChange={(v) => onEffect((e) => ({ ...e, value: v }))}
+        sliderFields={sliderFields}
+        onSliderFields={onSliderFields}
       />
     </YStack>
   );
@@ -622,16 +666,19 @@ function EffectDarkenControls({
 function EffectDesaturateControls({
   effect,
   onEffect,
-}: {
-  effect: DesaturateEffect;
-  onEffect: (update: (e: Effect) => Effect) => void;
-}) {
+  sliderFields,
+  onSliderFields,
+  scenePath,
+}: EffectControlsProps<DesaturateEffect>) {
   return (
     <YStack>
-      <EffectSlider
-        label="Desaturate"
+      <GradientSlider
+        label="Desaturate Amount"
         value={effect.value}
+        sliderKey={getSliderKey(scenePath, `effects:${effect.key}:value`)}
         onValueChange={(v) => onEffect((e) => ({ ...e, value: v }))}
+        sliderFields={sliderFields}
+        onSliderFields={onSliderFields}
       />
     </YStack>
   );
@@ -640,29 +687,44 @@ function EffectDesaturateControls({
 function EffectColorizeControls({
   effect,
   onEffect,
-}: {
-  effect: ColorizeEffect;
-  onEffect: (update: (e: Effect) => Effect) => void;
-}) {
+  sliderFields,
+  onSliderFields,
+  scenePath,
+}: EffectControlsProps<ColorizeEffect>) {
   return (
     <YStack>
-      <EffectSlider
-        label="Amount"
+      <GradientSlider
+        label="Colorize Amount"
         value={effect.amount}
+        sliderKey={getSliderKey(scenePath, `effects:${effect.key}:amount`)}
         onValueChange={(v) => onEffect((e) => ({ ...e, amount: v }))}
+        sliderFields={sliderFields}
+        onSliderFields={onSliderFields}
       />
-      <View height={50} backgroundColor={hslToHex(effect.hue, effect.saturation, 0.5)} borderRadius="$3" />
-      <EffectSlider
+      <View
+        height={50}
+        marginTop="$4"
+        backgroundColor={hslToHex(effect.hue, effect.saturation, 0.5)}
+        borderRadius="$3"
+      />
+      <GradientSlider
         label="Hue"
         max={360}
         step={1}
         value={effect.hue}
+        sliderKey={getSliderKey(scenePath, `effects:${effect.key}:hue`)}
         onValueChange={(v) => onEffect((e) => ({ ...e, hue: v }))}
+        sliderFields={sliderFields}
+        onSliderFields={onSliderFields}
       />
-      <EffectSlider
+
+      <GradientSlider
         label="Saturation"
         value={effect.saturation}
+        sliderKey={getSliderKey(scenePath, `effects:${effect.key}:saturation`)}
         onValueChange={(v) => onEffect((e) => ({ ...e, saturation: v }))}
+        sliderFields={sliderFields}
+        onSliderFields={onSliderFields}
       />
     </YStack>
   );
@@ -671,14 +733,21 @@ function EffectColorizeControls({
 function EffectRotateControls({
   effect,
   onEffect,
-}: {
-  effect: RotateEffect;
-  onEffect: (update: (e: Effect) => Effect) => void;
-}) {
+  sliderFields,
+  onSliderFields,
+  scenePath,
+}: EffectControlsProps<RotateEffect>) {
   const onValueChange = (v: number) => onEffect((e) => ({ ...e, value: v }));
   return (
     <YStack>
-      <EffectSlider label="Rotation" value={effect.value} onValueChange={onValueChange} />
+      <GradientSlider
+        label="Rotation"
+        value={effect.value}
+        sliderKey={getSliderKey(scenePath, `effects:${effect.key}:value`)}
+        onValueChange={onValueChange}
+        sliderFields={sliderFields}
+        onSliderFields={onSliderFields}
+      />
       <Group separator={<Separator vertical />} orientation="horizontal">
         <GroupItem>
           <Button
@@ -708,19 +777,22 @@ function EffectRotateControls({
 function EffectHueShiftControls({
   effect,
   onEffect,
-}: {
-  effect: HueShiftEffect;
-  onEffect: (update: (e: Effect) => Effect) => void;
-}) {
+  sliderFields,
+  onSliderFields,
+  scenePath,
+}: EffectControlsProps<HueShiftEffect>) {
   return (
     <YStack>
-      <EffectSlider
+      <GradientSlider
         label="Hue Shift"
         step={1}
         min={-180}
         max={180}
         value={effect.value}
+        sliderKey={getSliderKey(scenePath, `effects:${effect.key}:value`)}
         onValueChange={(v) => onEffect((e) => ({ ...e, value: v }))}
+        sliderFields={sliderFields}
+        onSliderFields={onSliderFields}
       />
     </YStack>
   );
@@ -732,14 +804,32 @@ const LayerMixOptions = [
   { key: 'add', label: 'Add' },
 ] as const;
 
+function getSliderKey(scenePath: string[], fieldName: string) {
+  const innerScenePath = scenePath.slice(1);
+  return [...innerScenePath, fieldName].join(':');
+}
+
+function getSliderFieldUpdater(scenePath: string[]) {
+  return (update: (m: SliderFields) => SliderFields) => {
+    const key = scenePath[0] === 'live' ? 'liveSliderFields' : 'readySliderFields';
+    mainStateUpdate((state) => {
+      return { ...state, [key]: update(state[key] || {}) };
+    });
+  };
+}
+
 function LayerControls({
   layersScene,
   layerKey,
   onScene,
+  scenePath,
+  sliderFields,
 }: {
   layersScene: LayersScene;
   layerKey: string;
   onScene: (update: (m: Scene) => Scene) => void;
+  scenePath: string[];
+  sliderFields?: SliderFields;
 }) {
   const layer = layersScene.layers?.find((layer) => layer.key === layerKey);
   if (!layer) return null;
@@ -768,6 +858,8 @@ function LayerControls({
           <GradientSlider
             label={`${blendMode?.label || 'Blend'} Amount`}
             value={layer.blendAmount}
+            sliderFields={sliderFields}
+            sliderKey={getSliderKey([...scenePath, `layer_${layerKey}`], 'blendAmount')}
             onValueChange={(v) => {
               onScene((scene) => {
                 if (scene.type !== 'layers') return scene;
@@ -777,6 +869,7 @@ function LayerControls({
                 };
               });
             }}
+            onSliderFields={getSliderFieldUpdater(scenePath)}
           />
         </>
       )}
@@ -841,6 +934,9 @@ function GradientSlider({
   step,
   min,
   max,
+  sliderFields,
+  sliderKey,
+  onSliderFields,
 }: {
   label: string;
   value: number;
@@ -848,7 +944,12 @@ function GradientSlider({
   step?: number;
   min?: number;
   max?: number;
+  sliderFields?: SliderFields;
+  onSliderFields: (update: (m: SliderFields) => SliderFields) => void;
+  sliderKey: string;
 }) {
+  const fieldSettings = sliderFields?.[sliderKey];
+  const smoothing = fieldSettings?.smoothing == null ? 0.5 : fieldSettings.smoothing;
   return (
     <>
       <BottomSheet
@@ -862,7 +963,17 @@ function GradientSlider({
         }
       >
         <YStack flex={1}>
-          <EffectSlider label="slider" value={0.5} step={0.01} onValueChange={() => {}} />
+          <Label>Smoothing</Label>
+          <SmoothSlider
+            value={smoothing == null ? 0.5 : smoothing}
+            step={0.01}
+            max={1}
+            size={50}
+            smoothing={0}
+            onValueChange={(v) => {
+              onSliderFields((fields) => ({ ...fields, [sliderKey]: { ...(fields[sliderKey] || {}), smoothing: v } }));
+            }}
+          />
           <Section title="Dashboard">
             <Button>Add to Dashboard</Button>
           </Section>
@@ -875,7 +986,7 @@ function GradientSlider({
         max={max == undefined ? 1 : max}
         onValueChange={(v) => onValueChange(v)}
         size={50}
-        smoothing={0.5}
+        smoothing={smoothing}
       />
     </>
   );
@@ -924,17 +1035,7 @@ function EffectSlider({
   );
 }
 
-function SequenceScreen({
-  scene,
-  onScene,
-  controlPath,
-  extraControls,
-}: {
-  scene: SequenceScene;
-  onScene: (update: (m: Scene) => Scene) => void;
-  controlPath: string[];
-  extraControls?: any;
-}) {
+function SequenceScreen({ scene, onScene, controlPath, extraControls }: SceneScreenProps<SequenceScene>) {
   return (
     <YStack>
       <DraggableFlatList
@@ -1053,29 +1154,37 @@ function GenericSceneControls({
   );
 }
 
-function ColorScreen({
-  scene,
-  onScene,
-  controlPath,
-  extraControls,
-}: {
-  scene: ColorScene;
-  onScene: (update: (m: Scene) => Scene) => void;
-  controlPath: string[];
-  extraControls?: any;
-}) {
+function ColorScreen({ scene, onScene, controlPath, extraControls, sliderFields }: SceneScreenProps<ColorScene>) {
   return (
     <ScrollView>
       <YStack gap="$4" padding="$4">
-        <EffectSlider
-          label="Hue"
+        <GradientSlider
+          label={`Hue`}
           value={scene.h}
-          onValueChange={(v) => onScene((s) => ({ ...s, h: v }))}
+          sliderFields={sliderFields}
+          sliderKey={getSliderKey(controlPath, 'h')}
           max={360}
           step={1}
+          onValueChange={(v) => onScene((s) => ({ ...s, h: v }))}
+          onSliderFields={getSliderFieldUpdater(controlPath)}
         />
-        <EffectSlider label="Saturation" value={scene.s} onValueChange={(v) => onScene((s) => ({ ...s, s: v }))} />
-        <EffectSlider label="Brightness" value={scene.l} onValueChange={(v) => onScene((s) => ({ ...s, l: v }))} />
+        <GradientSlider
+          label={`Saturation`}
+          value={scene.s}
+          sliderFields={sliderFields}
+          sliderKey={getSliderKey(controlPath, 's')}
+          onValueChange={(v) => onScene((s) => ({ ...s, s: v }))}
+          onSliderFields={getSliderFieldUpdater(controlPath)}
+        />
+        <GradientSlider
+          label={`Brightness`}
+          value={scene.l}
+          sliderFields={sliderFields}
+          sliderKey={getSliderKey(controlPath, 'l')}
+          onValueChange={(v) => onScene((s) => ({ ...s, l: v }))}
+          onSliderFields={getSliderFieldUpdater(controlPath)}
+        />
+
         {extraControls}
         <GenericSceneControls controlPath={controlPath} scene={scene} onScene={onScene} />
         <ResetSceneButton controlPath={controlPath} scene={scene} onScene={onScene} />
@@ -1084,17 +1193,7 @@ function ColorScreen({
   );
 }
 
-function OffScreen({
-  scene,
-  onScene,
-  controlPath,
-  extraControls,
-}: {
-  scene: OffScene;
-  onScene: (update: (m: Scene) => Scene) => void;
-  controlPath: string[];
-  extraControls?: any;
-}) {
+function OffScreen({ scene, onScene, controlPath, extraControls }: SceneScreenProps<OffScene>) {
   return (
     <ScrollView>
       <YStack gap="$4" padding="$4">
@@ -1113,17 +1212,7 @@ function iconOfBlendMode(blendMode: 'add' | 'mix' | 'mask') {
   return <LucideIcon icon="Blend" />;
 }
 
-function LayersScreen({
-  scene,
-  onScene,
-  controlPath,
-  extraControls,
-}: {
-  scene: LayersScene;
-  onScene: (update: (m: Scene) => Scene) => void;
-  controlPath: string[];
-  extraControls?: any;
-}) {
+function LayersScreen({ scene, onScene, controlPath, extraControls }: SceneScreenProps<LayersScene>) {
   return (
     <YStack>
       <DraggableFlatList
@@ -1287,19 +1376,8 @@ function ResetSceneButton({
   );
 }
 
-function VideoScreen({
-  scene,
-  onScene,
-  controlPath,
-  index,
-  extraControls,
-}: {
-  scene: VideoScene;
-  onScene: (update: (m: Scene) => Scene) => void;
-  controlPath: string[];
-  index: MediaIndex | undefined;
-  extraControls?: any;
-}) {
+function VideoScreen({ scene, onScene, controlPath, onGetMediaIndex, extraControls }: SceneScreenProps<VideoScene>) {
+  const index = onGetMediaIndex();
   return (
     <ScrollView>
       <YStack marginVertical="$4" marginHorizontal="$4" gap="$4">

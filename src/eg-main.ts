@@ -198,13 +198,17 @@ function normalizedSigmoid(input: number): number {
 function applyGradientValue(destValue: number, valuePath: string, ctx: StateContext) {
   let nextValue = destValue;
   const recentValue = ctx.recentGradientValues[valuePath];
-  const [mainStateKey, ...restValuePath] = valuePath.split('.');
-  const sliderFields = ctx.mainState[mainStateKey === 'liveScene' ? 'liveSliderFields' : 'readySliderFields'];
-  const slider = sliderFields[restValuePath.join('.')];
+  const [mainStateKey, ...restValuePath] = valuePath.split(':');
+  const sliderFields = ctx.mainState[mainStateKey === 'live' ? 'liveSliderFields' : 'readySliderFields'];
+  const sliderKey = restValuePath.join(':');
+  const slider = sliderFields[sliderKey];
   if (recentValue != null) {
-    const smoothing = slider?.smoothing || DefaultSmoothing;
-    const moveAggression = smoothing <= 0 ? 1 : (1 - smoothing) / 5 + 0.02; // 0.05 is default
-    nextValue = destValue * moveAggression + recentValue * (1 - moveAggression);
+    const smoothing = slider?.smoothing == null ? DefaultSmoothing : slider.smoothing;
+    if (smoothing === 0) nextValue = destValue;
+    else {
+      const moveAggression = smoothing <= 0 ? 1 : (1 - smoothing) / 5 + 0.02; // 0.05 is default
+      nextValue = destValue * moveAggression + recentValue * (1 - moveAggression);
+    }
   }
   ctx.recentGradientValues[valuePath] = nextValue;
   const lastBounceTime = ctx.bounceTimes[valuePath];
@@ -223,9 +227,9 @@ function applyGradientValue(destValue: number, valuePath: string, ctx: StateCont
 }
 
 function colorFrame(scene: ColorScene, ctx: StateContext, controlPath: string): Frame {
-  const h = applyGradientValue(scene.h, `${controlPath}.h`, ctx);
-  const s = applyGradientValue(scene.s, `${controlPath}.s`, ctx);
-  const l = applyGradientValue(scene.l, `${controlPath}.l`, ctx);
+  const h = applyGradientValue(scene.h, `${controlPath}:h`, ctx);
+  const s = applyGradientValue(scene.s, `${controlPath}:s`, ctx);
+  const l = applyGradientValue(scene.l, `${controlPath}:l`, ctx);
   return createSolidHSLFrame(egInfo, h, s, l);
 }
 
@@ -243,24 +247,24 @@ function videoFrameBare(scene: VideoScene, ctx: StateContext, controlPath: strin
 }
 
 function withColorize(frame: Frame, effect: ColorizeEffect, ctx: StateContext, controlPath: string): Frame {
-  const amount = applyGradientValue(effect.amount, `${controlPath}.amount`, ctx);
-  const hue = applyGradientValue(effect.hue, `${controlPath}.hue`, ctx);
-  const saturation = applyGradientValue(effect.saturation, `${controlPath}.saturation`, ctx);
+  const amount = applyGradientValue(effect.amount, `${controlPath}:amount`, ctx);
+  const hue = applyGradientValue(effect.hue, `${controlPath}:hue`, ctx);
+  const saturation = applyGradientValue(effect.saturation, `${controlPath}:saturation`, ctx);
   return frameColorize(egInfo, frame, amount, hue, saturation);
 }
 
 function withDesaturate(frame: Frame, effect: DesaturateEffect, ctx: StateContext, controlPath: string): Frame {
-  const value = applyGradientValue(effect.value, `${controlPath}.value`, ctx);
+  const value = applyGradientValue(effect.value, `${controlPath}:value`, ctx);
   return frameDesaturate(egInfo, frame, value);
 }
 
 function withHueShift(frame: Frame, effect: HueShiftEffect, ctx: StateContext, controlPath: string): Frame {
-  const value = applyGradientValue(effect.value, `${controlPath}.value`, ctx);
+  const value = applyGradientValue(effect.value, `${controlPath}:value`, ctx);
   return frameHueShift(egInfo, frame, value);
 }
 
 function withRotate(frame: Frame, effect: RotateEffect, ctx: StateContext, controlPath: string): Frame {
-  const value = applyGradientValue(effect.value, `${controlPath}.value`, ctx);
+  const value = applyGradientValue(effect.value, `${controlPath}:value`, ctx);
   return frameRotate(egInfo, frame, value);
 }
 
@@ -269,12 +273,12 @@ function withInvert(frame: Frame, effect: InvertEffect, ctx: StateContext, contr
 }
 
 function withBrighten(frame: Frame, effect: BrightenEffect, ctx: StateContext, controlPath: string): Frame {
-  const value = applyGradientValue(effect.value, `${controlPath}.value`, ctx);
+  const value = applyGradientValue(effect.value, `${controlPath}:value`, ctx);
   return frameBrighten(egInfo, frame, value);
 }
 
 function withDarken(frame: Frame, effect: DarkenEffect, ctx: StateContext, controlPath: string): Frame {
-  const value = applyGradientValue(effect.value, `${controlPath}.value`, ctx);
+  const value = applyGradientValue(effect.value, `${controlPath}:value`, ctx);
   return frameDarken(egInfo, frame, value);
 }
 
@@ -292,14 +296,14 @@ function withMediaEffect(frame: Frame, effect: Effect, ctx: StateContext, contro
 function withMediaEffects(frame: Frame, effects: Effects | undefined, ctx: StateContext, controlPath: string): Frame {
   let outFrame = frame;
   effects?.forEach((effect) => {
-    outFrame = withMediaEffect(outFrame, effect, ctx, `${controlPath}.${effect.key}`);
+    outFrame = withMediaEffect(outFrame, effect, ctx, `${controlPath}:${effect.key}`);
   });
   return outFrame;
 }
 
 function videoFrame(scene: VideoScene, ctx: StateContext, controlPath: string): Frame {
   const frame = videoFrameBare(scene, ctx, controlPath);
-  return withMediaEffects(frame, scene.effects, ctx, `${controlPath}.effects`);
+  return withMediaEffects(frame, scene.effects, ctx, `${controlPath}:effects`);
 }
 
 function layerBlend(frameA: Frame, frameB: Frame, blendMode: 'mix' | 'add' | 'mask', blendAmount: number): Frame {
@@ -315,13 +319,9 @@ function layersFrame(scene: LayersScene, ctx: StateContext, controlPath: string)
   if (!firstLayer) return blackFrame;
   let frame = mediaFrame(firstLayer.scene, ctx, `${controlPath}.layer.${firstLayer.key}`);
   reverseLayers.forEach((layer) => {
-    const layerAmount = applyGradientValue(layer.blendAmount, `${controlPath}.layer.${layer.key}.blendAmount`, ctx);
-    frame = layerBlend(
-      frame,
-      mediaFrame(layer.scene, ctx, `${controlPath}.layer.${layer.key}`),
-      layer.blendMode,
-      layerAmount
-    );
+    const layerKey = `${controlPath}:layer_${layer.key}`;
+    const layerAmount = applyGradientValue(layer.blendAmount, `${layerKey}:blendAmount`, ctx);
+    frame = layerBlend(frame, mediaFrame(layer.scene, ctx, layerKey), layer.blendMode, layerAmount);
   });
   return frame;
 }
@@ -363,7 +363,7 @@ function sequenceFrame(scene: SequenceScene, ctx: StateContext, controlPath: str
     return transition(egInfo, activeMediaFrame, nextFrame, transitionSpec, progress);
   }
 
-  return mediaFrame(activeItem.scene, ctx, `${controlPath}.item.${activeItem.key}`);
+  return mediaFrame(activeItem.scene, ctx, `${controlPath}:item_${activeItem.key}`);
 }
 
 function mediaFrame(scene: Scene, ctx: StateContext, controlPath: string): Frame {
@@ -376,9 +376,9 @@ function mediaFrame(scene: Scene, ctx: StateContext, controlPath: string): Frame
 }
 
 export function getEGLiveFrame(mainState: MainState, ctx: StateContext, readyFrame: Frame): Frame {
-  const liveFrame = mediaFrame(mainState.liveScene, ctx, 'liveScene');
+  const liveFrame = mediaFrame(mainState.liveScene, ctx, 'live');
   const { manual, autoStartTime } = mainState.transitionState;
-  const manualProgress = typeof manual === 'number' ? applyGradientValue(manual, 'transitionState.manual', ctx) : null;
+  const manualProgress = typeof manual === 'number' ? applyGradientValue(manual, 'transitionState:manual', ctx) : null;
   let transitionProgress = manualProgress;
 
   if (autoStartTime && transitionProgress == null) {
@@ -400,5 +400,5 @@ function transition(egInfo: EGInfo, frameA: Frame, frameB: Frame, transition: Tr
 }
 
 export function getEGReadyFrame(mainState: MainState, ctx: StateContext): Frame {
-  return mediaFrame(mainState.readyScene, ctx, 'readyScene');
+  return mediaFrame(mainState.readyScene, ctx, 'ready');
 }

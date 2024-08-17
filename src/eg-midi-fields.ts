@@ -47,10 +47,10 @@ export type MidiField = {
 //   return midiFields
 // }
 
-export function getDashboardMidiFields(dash: Dashboard, keyPrefix: string) {
+export function getDashboardMidiFields(dash: Dashboard | undefined, keyPrefix: string) {
   const sliders: MidiField[] = [];
   const buttons: MidiField[] = [];
-  dash.forEach((item) => {
+  dash?.forEach((item) => {
     if (item.behavior === 'slider') {
       sliders.push({ behavior: 'slider', field: `${keyPrefix}.${item.field}`, key: item.key });
     }
@@ -74,9 +74,9 @@ export function getDashboardMidiFields(dash: Dashboard, keyPrefix: string) {
 
 export type DashMidi = ReturnType<typeof getDashboardMidiFields>;
 
-export function getMidiFields(state: MainState) {
+export function getMidiFields(state: MainState | null) {
   return {
-    ready: getDashboardMidiFields(state.readyDashboard, 'readyScene'),
-    live: getDashboardMidiFields(state.liveDashboard, 'liveScene'),
+    ready: getDashboardMidiFields(state?.readyDashboard, 'readyScene'),
+    live: getDashboardMidiFields(state?.liveDashboard, 'liveScene'),
   };
 }

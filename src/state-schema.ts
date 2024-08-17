@@ -237,6 +237,9 @@ export type DashboardItem = z.infer<typeof dashboardItemSchema>;
 export const dashboardSchema = z.array(dashboardItemSchema);
 export type Dashboard = z.infer<typeof dashboardSchema>;
 
+export const sliderFieldsSchema = z.record(sliderFieldSchema);
+export type SliderFields = z.infer<typeof sliderFieldsSchema>;
+
 export const MainStateSchema = z.object({
   liveScene: sceneSchema,
   readyScene: sceneSchema,
@@ -244,8 +247,8 @@ export const MainStateSchema = z.object({
   transitionState: transitionStateSchema,
   liveDashboard: dashboardSchema,
   readyDashboard: dashboardSchema,
-  liveSliderFields: z.record(sliderFieldSchema),
-  readySliderFields: z.record(sliderFieldSchema),
+  liveSliderFields: sliderFieldsSchema,
+  readySliderFields: sliderFieldsSchema,
 });
 
 export type MainState = z.infer<typeof MainStateSchema>;

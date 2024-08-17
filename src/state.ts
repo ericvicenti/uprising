@@ -144,6 +144,28 @@ export const sceneState = lookup((controlPath) => {
   );
 });
 
+export const sliderFields = lookup((key) => {
+  return view(
+    (get) => {
+      if (key === 'live') return get(mainState)?.liveSliderFields;
+      if (key === 'ready') return get(mainState)?.readySliderFields;
+      return undefined;
+    },
+    { compare: true }
+  );
+});
+
+export const dashboards = lookup((key) => {
+  return view(
+    (get) => {
+      if (key === 'live') return get(mainState)?.liveDashboard;
+      if (key === 'ready') return get(mainState)?.readyDashboard;
+      return undefined;
+    },
+    { compare: true }
+  );
+});
+
 export function createBlankScene(type: Scene['type']): Scene {
   if (type === 'off') {
     return { type };
