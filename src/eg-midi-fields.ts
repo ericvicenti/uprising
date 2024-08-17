@@ -1,4 +1,5 @@
-import { Dashboard, MainState } from './state-schema';
+import { bounceField } from './state';
+import { Dashboard, MainState, Scene } from './state-schema';
 
 export type MidiField = {
   key: string;
@@ -8,75 +9,40 @@ export type MidiField = {
   max?: number;
 };
 
-// export function getMidiFields(state: MainState) {
-//   const readySliders: MidiField[] = []
-//   const liveSliders: MidiField[] = []
-//   const readyButtons: MidiField[] = []
-//   const liveButtons: MidiField[] = []
-//   state.liveDashboard.forEach((item) => {
-//     if (item.behavior === 'slider') {
-//       liveSliders.push({ behavior: 'slider', field: `liveScene.${item.field}` })
-//     }
-//     if (item.behavior === 'bounceButton') {
-//       liveButtons.push({ behavior: 'bounceButton', field: `liveScene.${item.field}` })
-//     }
-//   })
-//   state.readyDashboard.forEach((item) => {
-//     if (item.behavior === 'slider') {
-//       readySliders.push({
-//         behavior: 'slider',
-//         field: `readyScene.${item.field}`,
-//         min: item.min,
-//         max: item.max,
-//       })
-//     }
-//     if (item.behavior === 'bounceButton') {
-//       readyButtons.push({
-//         behavior: 'bounceButton',
-//         field: `readyScene.${item.field}`,
-//         min: item.min,
-//         max: item.max,
-//       })
-//     }
-//   })
-//   const midiFields = {
-//     ready: { sliders: readySliders, buttons: readyButtons },
-//     live: { sliders: liveSliders, buttons: liveButtons },
-//   }
-//   console.log('midiFields', JSON.stringify(midiFields))
-//   return midiFields
-// }
-
-export function getDashboardMidiFields(dash: Dashboard | undefined, keyPrefix: string) {
-  const sliders: MidiField[] = [];
-  const buttons: MidiField[] = [];
-  dash?.forEach((item) => {
+export function getDashboardMidiControls(
+  dash: Dashboard | undefined,
+  scene: Scene | undefined,
+  dashboardId: 'live' | 'ready'
+) {
+  const sliders: { onValue: (value: number) => void }[] = [];
+  const buttons: { onPress: () => void }[] = [];
+  if (!dash || !scene) return { buttons, sliders };
+  dash.forEach((item) => {
     if (item.behavior === 'slider') {
-      sliders.push({ behavior: 'slider', field: `${keyPrefix}.${item.field}`, key: item.key });
+      // apply midiConfig.min and .max to value. value goes from 0-1
+      // sliders.push({ behavior: 'slider', field: `${keyPrefix}.${item.field}`, key: item.key });
     }
-    if (item.behavior === 'bounceButton') {
+    if (item.behavior === 'bounce') {
       buttons.push({
-        behavior: 'bounceButton',
-        field: `${keyPrefix}.${item.field}`,
-        key: item.key,
+        onPress: () => {
+          bounceField(dashboardId, item.field);
+        },
       });
     }
-    if (item.behavior === 'goNextButton') {
+    if (item.behavior === 'goNext') {
       buttons.push({
-        behavior: 'goNextButton',
-        field: `${keyPrefix}.${item.field}`,
-        key: item.key,
+        onPress: () => {},
       });
     }
   });
   return { buttons, sliders };
 }
 
-export type DashMidi = ReturnType<typeof getDashboardMidiFields>;
+export type DashMidi = ReturnType<typeof getDashboardMidiControls>;
 
-export function getMidiFields(state: MainState | null) {
+export function getMidiControls(state: MainState | null) {
   return {
-    ready: getDashboardMidiFields(state?.readyDashboard, 'readyScene'),
-    live: getDashboardMidiFields(state?.liveDashboard, 'liveScene'),
+    live: getDashboardMidiControls(state?.liveDashboard, state?.liveScene, 'live'),
+    ready: getDashboardMidiControls(state?.readyDashboard, state?.readyScene, 'ready'),
   };
 }

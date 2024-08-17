@@ -23,10 +23,10 @@
     "release": "npm run clean && npm run build && release-it"
   },
   "dependencies": {
-    "@rise-tools/kit-react-navigation": "^0.11.0",
-    "@rise-tools/kitchen-sink": "^0.11.0",
-    "@rise-tools/react": "^0.11.0",
-    "@rise-tools/server": "^0.11.0",
+    "@rise-tools/kit-react-navigation": "^0.11.1",
+    "@rise-tools/kitchen-sink": "^0.11.1",
+    "@rise-tools/react": "^0.11.1",
+    "@rise-tools/server": "^0.11.1",
     "chroma-js": "^2.4.2",
     "sacn": "^4.4.0",
     "webmidi": "^3.1.9"

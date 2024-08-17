@@ -4,7 +4,7 @@ import React from 'react';
 import { hslToHex } from './color';
 import { DefaultBounceAmount, DefaultBounceDuration, DefaultSmoothing, DefaultTransitionDuration } from './constants';
 import { getSequenceActiveItem } from './eg-main';
-import { DashMidi, getDashboardMidiFields } from './eg-midi-fields';
+import { DashMidi, getDashboardMidiControls } from './eg-midi-fields';
 import { EGVideo } from './eg-video-playback';
 import {
   ColorScene,
@@ -426,7 +426,7 @@ function getFieldLabel(path: string[], rootMediaKey: 'liveScene' | 'readyScene',
 export function getDashboardUI(state: MainState, context: UIContext, rootMediaKey: 'liveScene' | 'readyScene') {
   const dash = state[rootMediaKey === 'liveScene' ? 'liveDashboard' : 'readyDashboard'];
   const sceneState = state[rootMediaKey === 'liveScene' ? 'liveScene' : 'readyScene'];
-  const midi = getDashboardMidiFields(dash, rootMediaKey);
+  const midi = getDashboardMidiControls(dash, rootMediaKey);
   return scroll([
     title(rootMediaKey === 'liveScene' ? 'Live Dashboard' : 'Ready Dashboard'),
     {

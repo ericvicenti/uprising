@@ -1508,104 +1508,104 @@
     conventional-recommended-bump "^6.1.0"
     semver "7.3.8"
 
-"@rise-tools/kit-forms@0.11.0":
-  version "0.11.0"
-  resolved "https://registry.yarnpkg.com/@rise-tools/kit-forms/-/kit-forms-0.11.0.tgz#3fb8a43aa9c52b568bc87d9eaa49afedb6751dc1"
-  integrity sha512-SkcGmg0lmFDmtaPg0nP0ZPKAcTh+uDG4IK+/V/N42Nt1Hw0SziPcWEx8MIMtRQIOka0uqF9zP+XeE9mWOjs1Rg==
+"@rise-tools/kit-forms@0.11.1":
+  version "0.11.1"
+  resolved "https://registry.yarnpkg.com/@rise-tools/kit-forms/-/kit-forms-0.11.1.tgz#47627ac3dc2d85229bb7851352d6c34d755130af"
+  integrity sha512-JWKW3pfdGa7TMD9GwlYBKgOuaHHYlq1YCBMhI1FayQtSR7BmPhXod6No365O0zveYA9d6cYhL+16VAjoucCGlg==
   dependencies:
-    "@rise-tools/react" "0.11.0"
+    "@rise-tools/react" "0.11.1"
     zod "^3.22.4"
 
-"@rise-tools/kit-haptics@0.11.0":
-  version "0.11.0"
-  resolved "https://registry.yarnpkg.com/@rise-tools/kit-haptics/-/kit-haptics-0.11.0.tgz#093067c3fa09bb61b7eacb89e152521b6d923875"
-  integrity sha512-vDcyI0xg4lHI1al/sR5vd4Nm1oNBky6AW3MsUjCNSDxSMbHA98pCN7qlSvE/UhMdZdWEKr7XYgFGEd0vgq1qgQ==
+"@rise-tools/kit-haptics@0.11.1":
+  version "0.11.1"
+  resolved "https://registry.yarnpkg.com/@rise-tools/kit-haptics/-/kit-haptics-0.11.1.tgz#d72381e9dea90be61352566e1c936b6538416f61"
+  integrity sha512-FAB0/sDI7L3hu6STGf5iWUWp7tae0kADq8f1Bo8WJq/4agxgqlCQM523kknuEBMQvW0H2h25nQ4D0H6/Th/EYw==
   dependencies:
-    "@rise-tools/react" "0.11.0"
+    "@rise-tools/react" "0.11.1"
     zod "^3.22.4"
 
-"@rise-tools/kit-linking@0.11.0":
-  version "0.11.0"
-  resolved "https://registry.yarnpkg.com/@rise-tools/kit-linking/-/kit-linking-0.11.0.tgz#61d40b9c2a1aa245cfc14c705a951166a21451d7"
-  integrity sha512-oMacYaUZ48xMn7TUKKnBDXjI67Xmznw36gr++4ucAQc+hOHLaTs8Y9KTBvTBeptH3Q9lkfH2cNGjttf6VJaDTQ==
+"@rise-tools/kit-linking@0.11.1":
+  version "0.11.1"
+  resolved "https://registry.yarnpkg.com/@rise-tools/kit-linking/-/kit-linking-0.11.1.tgz#d2d875614aca31369de8eb3f1c38d855fcac5dc8"
+  integrity sha512-a4pyZg7xbF8zGu7NTJ0O1ZocII7OItBpynwgMxNOnkMZDt11wXVL0toybxDTYJg7bxxc+K/RoGdsh5u/Dxw++w==
   dependencies:
-    "@rise-tools/react" "0.11.0"
+    "@rise-tools/react" "0.11.1"
     zod "^3.22.4"
 
-"@rise-tools/kit-lucide-icons@0.11.0":
-  version "0.11.0"
-  resolved "https://registry.yarnpkg.com/@rise-tools/kit-lucide-icons/-/kit-lucide-icons-0.11.0.tgz#68550674c407f21a976028ea6beec09b8966b776"
-  integrity sha512-mMKDBGrguEkNUMuNWFeTXcYjzfpey2VbUiwrhMn4etALsvYuq9+EVgxC0IFwcUgjGFEiJT48hVNoiXco77PNGA==
+"@rise-tools/kit-lucide-icons@0.11.1":
+  version "0.11.1"
+  resolved "https://registry.yarnpkg.com/@rise-tools/kit-lucide-icons/-/kit-lucide-icons-0.11.1.tgz#c5db3e1be6f4f33cc4b7acb474816103c596b41e"
+  integrity sha512-aRWSJi7JOrLFAViNf3IHyH83fD9a7D0KTaskFrB6NS8VO2eErkxKdmniA8F7fMQJcat3rO/xKQ1+K9BAFx/noA==
   dependencies:
-    "@rise-tools/react" "0.11.0"
+    "@rise-tools/react" "0.11.1"
     zod "^3.22.4"
 
-"@rise-tools/kit-qrcode@0.11.0":
-  version "0.11.0"
-  resolved "https://registry.yarnpkg.com/@rise-tools/kit-qrcode/-/kit-qrcode-0.11.0.tgz#e0de84803d6655169c5c499ba634eaa93adca58b"
-  integrity sha512-iGpQzmInraYf9l2j4qRlgnH+E3NeODmRG+EbHLeIpc8yHcWyAxZr93c4ZPUVMq0qjwot92+lGr3dlTCrohtxWg==
+"@rise-tools/kit-qrcode@0.11.1":
+  version "0.11.1"
+  resolved "https://registry.yarnpkg.com/@rise-tools/kit-qrcode/-/kit-qrcode-0.11.1.tgz#95582a2e66c7f911ea91b49d0b658ae1017fb28a"
+  integrity sha512-/WwoSK+lrzdXHNABvHq+qI3qzRKo81jrxApaAQ7xU0XBIxn/QHzuU6JMeY1+IHsPVSmTzjWZR28QVdabg/zASg==
   dependencies:
-    "@rise-tools/react" "0.11.0"
+    "@rise-tools/react" "0.11.1"
 
-"@rise-tools/kit-react-navigation@^0.11.0":
-  version "0.11.0"
-  resolved "https://registry.yarnpkg.com/@rise-tools/kit-react-navigation/-/kit-react-navigation-0.11.0.tgz#12850b02f4ed9190123b16424025aa01a08715a4"
-  integrity sha512-+tDwYO0QiFRC1y8x1XgeDIHj9BaUqvxOCpZBBSxwavBNEOlinv66WzDrWc7qu8D+/sF2UXJSycc0WzIEzkzTyQ==
+"@rise-tools/kit-react-navigation@^0.11.1":
+  version "0.11.1"
+  resolved "https://registry.yarnpkg.com/@rise-tools/kit-react-navigation/-/kit-react-navigation-0.11.1.tgz#734b5ad23b1753f0e7289b32a7b58122847ddaf8"
+  integrity sha512-IcunnmrLowYnBlRdnGJUBSzKBK2lF+CYqrmDDQ4pkcT3JItz288VLVz7vcnslOL/hGeBFGqm9YDqt+SlZfLiMg==
   dependencies:
-    "@rise-tools/react" "0.11.0"
+    "@rise-tools/react" "0.11.1"
     zod "^3.22.4"
 
-"@rise-tools/kit-svg@0.11.0":
-  version "0.11.0"
-  resolved "https://registry.yarnpkg.com/@rise-tools/kit-svg/-/kit-svg-0.11.0.tgz#ef8926863341174b4a8ae04a00efb03e1d944e5b"
-  integrity sha512-sJ+N0rP2JhgRrTJvs/Mg8DE3jiEfzC9HXRtK7tavskLsi/IrXMmxEOJxmB5EqmOxfqhSREdUteeV233nRwAjwA==
+"@rise-tools/kit-svg@0.11.1":
+  version "0.11.1"
+  resolved "https://registry.yarnpkg.com/@rise-tools/kit-svg/-/kit-svg-0.11.1.tgz#cae32349bd663f65c348437cde8bdbaf867c1758"
+  integrity sha512-G1tKqryyWzrIWl4xAcTHeV4JgI/rVTr5DNiajRqEA4FfpHVFljNQPrXm2gOyZIaUOb0LCuvZdEevyAla0OjtCw==
   dependencies:
-    "@rise-tools/react" "0.11.0"
+    "@rise-tools/react" "0.11.1"
     zod "^3.22.4"
 
-"@rise-tools/kit-tamagui-toast@0.11.0":
-  version "0.11.0"
-  resolved "https://registry.yarnpkg.com/@rise-tools/kit-tamagui-toast/-/kit-tamagui-toast-0.11.0.tgz#67389833bb01f324db7ad11b4066977399bfdf01"
-  integrity sha512-GMOGmPzOfQdlpWApVpzFZsS/BiSfoh+4kHPBjhOgBrSk/zGi+ltd4m0pg3LfLHrlbK57j8IC5uF6TaQMv7VTRA==
+"@rise-tools/kit-tamagui-toast@0.11.1":
+  version "0.11.1"
+  resolved "https://registry.yarnpkg.com/@rise-tools/kit-tamagui-toast/-/kit-tamagui-toast-0.11.1.tgz#bb6fcde375fbb384dea3c600f104034bab779179"
+  integrity sha512-sna+DeWrGM3IM9B3cS7d2qVIoOMqb4PKiUbIKdC/8UDwNto6rvhYUPlFfOW5Br3bqcv0zokUMKqWRvP6ff0kSQ==
   dependencies:
-    "@rise-tools/react" "0.11.0"
+    "@rise-tools/react" "0.11.1"
     zod "^3.22.4"
 
-"@rise-tools/kit-tamagui@0.11.0":
-  version "0.11.0"
-  resolved "https://registry.yarnpkg.com/@rise-tools/kit-tamagui/-/kit-tamagui-0.11.0.tgz#198ae06f4fe17fb02cc975ad3e3eb44764bc7971"
-  integrity sha512-XW2u34Wfb4jmr/+QbebsZ318aDXmDLfmYVDrwuK8Vk5ZU/icPRcN3OrFTNh2nQv4w8CMrVQWC4Kjfcqy8Keggg==
+"@rise-tools/kit-tamagui@0.11.1":
+  version "0.11.1"
+  resolved "https://registry.yarnpkg.com/@rise-tools/kit-tamagui/-/kit-tamagui-0.11.1.tgz#1cbe4d042ee3aec07942521d1b487fd1f6f51f93"
+  integrity sha512-kQERq6xL2JjunbWqK7kJHSQc6BhanyCuF5jlC+Wzoyp2OTE/1xw3DYSXQiCfOlgmZEN6zFn/U3iXblW4/alX0Q==
 
-"@rise-tools/kit-webview@0.11.0":
-  version "0.11.0"
-  resolved "https://registry.yarnpkg.com/@rise-tools/kit-webview/-/kit-webview-0.11.0.tgz#5a41a04902999d007378f3891e25d493875cb785"
-  integrity sha512-0wq3QznhTEHYsvj24jUTz9urcQ3ZW7kfa0H6QmRfnvVewtHVcKWlGtfc/Er2tbePJpKa1dXOPakn7D06K39ckQ==
+"@rise-tools/kit-webview@0.11.1":
+  version "0.11.1"
+  resolved "https://registry.yarnpkg.com/@rise-tools/kit-webview/-/kit-webview-0.11.1.tgz#d6c8a5b3697bb62975dc7370dc97bb45a0746ec5"
+  integrity sha512-IQ9NNGBsN44WY6xPyeZQE0dACVJ/uEnTdfvOWiJbvrWqwXvu9zCtBgSnMAqjI5W+962YEDFjlfOCqUGlpQl+nQ==
   dependencies:
-    "@rise-tools/react" "0.11.0"
+    "@rise-tools/react" "0.11.1"
     zod "^3.22.4"
 
-"@rise-tools/kit@0.11.0":
-  version "0.11.0"
-  resolved "https://registry.yarnpkg.com/@rise-tools/kit/-/kit-0.11.0.tgz#2df15fefcb28f6b057eed2bf59a1725c9f7c49dc"
-  integrity sha512-6Ld7RDinGiswwMKMhmjN/6M6p+LcxXlpkP9ZPtKG+oPI4q4HeOvUauw/GhUZo9y4U5zw2gnrcWr/CjJ1AcKyEA==
+"@rise-tools/kit@0.11.1":
+  version "0.11.1"
+  resolved "https://registry.yarnpkg.com/@rise-tools/kit/-/kit-0.11.1.tgz#6213e85b68315d85889f0f2579409b84c226ec03"
+  integrity sha512-7l0awn+3VQl5ycll6f+wRlD9rhL7sN8/dqrpbHYZoPkgbxL2zGHDoX2FUfEUI+H77x42Rpq2rjNBuc2j2q2Rqw==
   dependencies:
     zod "^3.22.4"
 
-"@rise-tools/kitchen-sink@^0.11.0":
-  version "0.11.0"
-  resolved "https://registry.yarnpkg.com/@rise-tools/kitchen-sink/-/kitchen-sink-0.11.0.tgz#54a1f2fe1358a05e69d9b813d5c81e57d4384017"
-  integrity sha512-+LVa42dw5OnswWE8PEciXgFJHfVIYrPiJ8vaRae8NRrvVUiHgqE78xVPAlNMP0Db5CnxluaZ49ZPm4PjiwP40w==
+"@rise-tools/kitchen-sink@^0.11.1":
+  version "0.11.1"
+  resolved "https://registry.yarnpkg.com/@rise-tools/kitchen-sink/-/kitchen-sink-0.11.1.tgz#79d1cd142684d65439068186d454f272b5e489ca"
+  integrity sha512-3Z45hXeJafMOGxRWIZdG7VF5ZVHmAFGgAXU2T9Q58Tk6Sak7huAe+qGefWVWughJfbe+fGA6bw7R11Icjh9vTg==
   dependencies:
-    "@rise-tools/kit" "0.11.0"
-    "@rise-tools/kit-forms" "0.11.0"
-    "@rise-tools/kit-haptics" "0.11.0"
-    "@rise-tools/kit-linking" "0.11.0"
-    "@rise-tools/kit-lucide-icons" "0.11.0"
-    "@rise-tools/kit-qrcode" "0.11.0"
-    "@rise-tools/kit-svg" "0.11.0"
-    "@rise-tools/kit-tamagui" "0.11.0"
-    "@rise-tools/kit-tamagui-toast" "0.11.0"
-    "@rise-tools/kit-webview" "0.11.0"
+    "@rise-tools/kit" "0.11.1"
+    "@rise-tools/kit-forms" "0.11.1"
+    "@rise-tools/kit-haptics" "0.11.1"
+    "@rise-tools/kit-linking" "0.11.1"
+    "@rise-tools/kit-lucide-icons" "0.11.1"
+    "@rise-tools/kit-qrcode" "0.11.1"
+    "@rise-tools/kit-svg" "0.11.1"
+    "@rise-tools/kit-tamagui" "0.11.1"
+    "@rise-tools/kit-tamagui-toast" "0.11.1"
+    "@rise-tools/kit-webview" "0.11.1"
 
 "@rise-tools/preset-typescript@^0.6.1":
   version "0.6.1"
@@ -1615,10 +1615,10 @@
     "@rise-tools/react" "0.6.1"
     "@tsconfig/node18" "^18.2.3"
 
-"@rise-tools/react@0.11.0", "@rise-tools/react@^0.11.0":
-  version "0.11.0"
-  resolved "https://registry.yarnpkg.com/@rise-tools/react/-/react-0.11.0.tgz#9faf833aa400360277ed7cc93a08d0c467fa109d"
-  integrity sha512-df4D2uB69hBeFEWsgOvc/AuKnHjRoTG3bo/wHploodxoEYwoab46z+fsZK5F3YyB8Kk1Au3kWBnKmvwYrt2YyQ==
+"@rise-tools/react@0.11.1", "@rise-tools/react@^0.11.1":
+  version "0.11.1"
+  resolved "https://registry.yarnpkg.com/@rise-tools/react/-/react-0.11.1.tgz#5b07b87374370b04e111a2cbaad09482be1f5d83"
+  integrity sha512-fuz4W6o0BhNBKftLWVZcQLOD9ARSdxJ1+kLUJXw6ZekreMInaoaj/7dWknlotgYB4V9f5FtIxgQODEhvp5xFtQ==
   dependencies:
     zod "^3.22.4"
 
@@ -1629,10 +1629,10 @@
   dependencies:
     zod "^3.22.4"
 
-"@rise-tools/server@^0.11.0":
-  version "0.11.0"
-  resolved "https://registry.yarnpkg.com/@rise-tools/server/-/server-0.11.0.tgz#d7b9c12cae1749c9efe7fcba7b790973fdc902ef"
-  integrity sha512-GNvgzkenQTOoQdhNQx0BtM7stBAO09az/c4zXRAICkRAALGbG7CIUh/u9c4KeCvKVKy7Errg5DWo89Cs2w1LvQ==
+"@rise-tools/server@^0.11.1":
+  version "0.11.1"
+  resolved "https://registry.yarnpkg.com/@rise-tools/server/-/server-0.11.1.tgz#01cfaac88460708ebc2aad5eae7d3642d25b5cd3"
+  integrity sha512-S4LZW+RhRATehYPBUZ+BzXSkBSIc+OLyaE39p27lOufKkGhI53YztF9sPCStNjgY9C62/KtQ6rMa5QxpoTTpaw==
   dependencies:
     "@fastify/websocket" "^10.0.1"
     fastify "^4.27.0"

@@ -1,4 +1,5 @@
 import { goBack, navigate, StackScreen } from '@rise-tools/kit-react-navigation/server';
+import { AnimatedProgress, SmoothSlider } from '@rise-tools/kit/server';
 import {
   BottomSheet,
   BottomSheetCloseButton,
@@ -7,70 +8,73 @@ import {
   DraggableFlatList,
   Group,
   GroupItem,
-  H5,
   Heading,
   InputField,
   Label,
+  LucideIcon,
   RiseForm,
   ScrollView,
   Separator,
+  Sheet,
   SheetScrollView,
   SizableText,
-  Slider,
-  SliderThumb,
-  SliderTrack,
-  SliderTrackActive,
   Spinner,
   SubmitButton,
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTab,
   Text,
   toast,
   View,
   XStack,
   YStack,
 } from '@rise-tools/kitchen-sink/server';
-import { AnimatedProgress, SmoothSlider } from '@rise-tools/kit/server';
-import { randomUUID } from 'crypto';
-import { createComponentDefinition, localStateExperimental, ModelState, ref, response } from '@rise-tools/react';
+import { createComponentDefinition, ref, response } from '@rise-tools/react';
 import { lookup, view } from '@rise-tools/server';
+import { randomUUID } from 'crypto';
+import { hslToHex } from './color';
+import { getSequenceActiveItem } from './eg-main';
+import { mainVideo } from './eg-video-playback';
+import { getLibraryItem, libraryIndex, writeLibraryItem } from './library';
 import { MediaIndex, mediaIndex } from './media';
 import {
+  addBounceToDashboard,
+  addSliderToDashboard,
+  addToDashboard,
+  bounceTimes,
   createBlankEffect,
   createBlankScene,
+  dashboardButtonPress,
+  dashboards,
+  DashboardState,
+  DashboardStateItem,
   mainState,
   mainStateUpdate,
   sceneState,
   sliderFields,
+  startAutoTransition,
   updateScene,
 } from './state';
 import {
+  BrightenEffect,
+  ColorizeEffect,
+  ColorScene,
+  DarkenEffect,
+  Dashboard,
+  DashboardItem,
+  DesaturateEffect,
+  Effect,
+  HueShiftEffect,
+  Layer,
+  LayersScene,
+  MainState,
+  OffScene,
+  RotateEffect,
   Scene,
+  SequenceItem,
+  SequenceScene,
+  SliderFields,
   Transition,
   TransitionState,
   VideoScene,
-  Effect,
-  BrightenEffect,
-  HueShiftEffect,
-  DarkenEffect,
-  DesaturateEffect,
-  RotateEffect,
-  ColorizeEffect,
-  LayersScene,
-  SequenceScene,
-  Layer,
-  ColorScene,
-  SequenceItem,
-  OffScene,
-  SliderFields,
 } from './state-schema';
-import { LucideIcon } from '@rise-tools/kitchen-sink/server';
-import { mainVideo } from './eg-video-playback';
-import { hslToHex } from './color';
-import { getSequenceActiveItem } from './eg-main';
-import { getLibraryItem, libraryIndex, writeLibraryItem } from './library';
 // import { isEqual } from 'lodash';
 
 type ReactElement = ReturnType<typeof createComponentDefinition>;
@@ -101,13 +105,7 @@ export const models = {
             </XStack>
             <Button
               onPress={() => {
-                mainStateUpdate((state) => ({
-                  ...state,
-                  transitionState: {
-                    ...state.transitionState,
-                    autoStartTime: Date.now(),
-                  },
-                }));
+                startAutoTransition();
               }}
               disabled={state.transitionState.manual !== null}
               icon={<LucideIcon icon="PlayCircle" />}
@@ -143,10 +141,9 @@ export const models = {
     { compare: isEqual }
   ),
   dashboard: lookup((dashboardKey) => {
+    const dashboard = dashboards.get(dashboardKey);
     return view((get) => (
-      <ScrollView>
-        <StackScreen title={dashboardKey} headerBackTitle={' '} />
-      </ScrollView>
+      <DashboardScreen dashboardKey={dashboardKey} dashboard={dashboard ? get(dashboard) : undefined} />
     ));
   }),
   browse_videos: view(
@@ -331,6 +328,34 @@ export const models = {
     );
   }),
 };
+
+function DashboardScreen({ dashboard, dashboardKey }: { dashboardKey: string; dashboard?: DashboardState }) {
+  const title = dashboardKey === 'live' ? 'Live Dashboard' : 'Ready Dashboard';
+  return (
+    <ScrollView>
+      <StackScreen title={title} headerBackTitle={' '} />
+      {dashboard?.items?.map((item) => <DashboardItem item={item} key={item.key} />)}
+    </ScrollView>
+  );
+}
+
+function DashboardItem({ item }: { item: DashboardStateItem }) {
+  if (item.type === 'button') {
+    return (
+      <YStack>
+        <Text>{item.locationLabel}</Text>
+        <Button
+          onPress={() => {
+            dashboardButtonPress(item);
+          }}
+        >
+          {item.behaviorLabel}
+        </Button>
+      </YStack>
+    );
+  }
+  return null;
+}
 
 function unpackControlPath(controlPath: string[]): { scenePath: string[]; restPath: string[] } {
   const scenePath: string[] = [];
@@ -572,7 +597,6 @@ function EffectScreen({
   const effectProps = {
     onEffect,
     sliderFields,
-    onSliderFields: getSliderFieldUpdater(controlPath),
     scenePath: controlPath.slice(0, -2),
   };
   if (effect?.type === 'brighten') {
@@ -617,47 +641,34 @@ type EffectControlsProps<EffectType> = {
   effect: EffectType;
   onEffect: (update: (e: Effect) => Effect) => void;
   sliderFields?: SliderFields;
-  onSliderFields: (update: (m: SliderFields) => SliderFields) => void;
   scenePath: string[];
 };
 
-function EffectBrightenControls({
-  effect,
-  onEffect,
-  sliderFields,
-  onSliderFields,
-  scenePath,
-}: EffectControlsProps<BrightenEffect>) {
+function EffectBrightenControls({ effect, onEffect, sliderFields, scenePath }: EffectControlsProps<BrightenEffect>) {
   return (
     <YStack>
       <GradientSlider
         label="Brighten Amount"
         value={effect.value}
-        sliderKey={getSliderKey(scenePath, `effects:${effect.key}:value`)}
+        scenePath={scenePath}
+        fieldPath={['effects', effect.key, 'value']}
         onValueChange={(v) => onEffect((e) => ({ ...e, value: v }))}
         sliderFields={sliderFields}
-        onSliderFields={onSliderFields}
       />
     </YStack>
   );
 }
 
-function EffectDarkenControls({
-  effect,
-  onEffect,
-  sliderFields,
-  onSliderFields,
-  scenePath,
-}: EffectControlsProps<DarkenEffect>) {
+function EffectDarkenControls({ effect, onEffect, sliderFields, scenePath }: EffectControlsProps<DarkenEffect>) {
   return (
     <YStack>
       <GradientSlider
         label="Darken Amount"
         value={effect.value}
-        sliderKey={getSliderKey(scenePath, `effects:${effect.key}:value`)}
+        scenePath={scenePath}
+        fieldPath={['effects', effect.key, 'value']}
         onValueChange={(v) => onEffect((e) => ({ ...e, value: v }))}
         sliderFields={sliderFields}
-        onSliderFields={onSliderFields}
       />
     </YStack>
   );
@@ -667,7 +678,6 @@ function EffectDesaturateControls({
   effect,
   onEffect,
   sliderFields,
-  onSliderFields,
   scenePath,
 }: EffectControlsProps<DesaturateEffect>) {
   return (
@@ -675,31 +685,25 @@ function EffectDesaturateControls({
       <GradientSlider
         label="Desaturate Amount"
         value={effect.value}
-        sliderKey={getSliderKey(scenePath, `effects:${effect.key}:value`)}
+        scenePath={scenePath}
+        fieldPath={['effects', effect.key, 'value']}
         onValueChange={(v) => onEffect((e) => ({ ...e, value: v }))}
         sliderFields={sliderFields}
-        onSliderFields={onSliderFields}
       />
     </YStack>
   );
 }
 
-function EffectColorizeControls({
-  effect,
-  onEffect,
-  sliderFields,
-  onSliderFields,
-  scenePath,
-}: EffectControlsProps<ColorizeEffect>) {
+function EffectColorizeControls({ effect, onEffect, sliderFields, scenePath }: EffectControlsProps<ColorizeEffect>) {
   return (
     <YStack>
       <GradientSlider
         label="Colorize Amount"
         value={effect.amount}
-        sliderKey={getSliderKey(scenePath, `effects:${effect.key}:amount`)}
+        scenePath={scenePath}
+        fieldPath={['effects', effect.key, 'amount']}
         onValueChange={(v) => onEffect((e) => ({ ...e, amount: v }))}
         sliderFields={sliderFields}
-        onSliderFields={onSliderFields}
       />
       <View
         height={50}
@@ -712,41 +716,35 @@ function EffectColorizeControls({
         max={360}
         step={1}
         value={effect.hue}
-        sliderKey={getSliderKey(scenePath, `effects:${effect.key}:hue`)}
+        scenePath={scenePath}
+        fieldPath={['effects', effect.key, 'hue']}
         onValueChange={(v) => onEffect((e) => ({ ...e, hue: v }))}
         sliderFields={sliderFields}
-        onSliderFields={onSliderFields}
       />
 
       <GradientSlider
         label="Saturation"
         value={effect.saturation}
-        sliderKey={getSliderKey(scenePath, `effects:${effect.key}:saturation`)}
+        scenePath={scenePath}
+        fieldPath={['effects', effect.key, 'saturation']}
         onValueChange={(v) => onEffect((e) => ({ ...e, saturation: v }))}
         sliderFields={sliderFields}
-        onSliderFields={onSliderFields}
       />
     </YStack>
   );
 }
 
-function EffectRotateControls({
-  effect,
-  onEffect,
-  sliderFields,
-  onSliderFields,
-  scenePath,
-}: EffectControlsProps<RotateEffect>) {
+function EffectRotateControls({ effect, onEffect, sliderFields, scenePath }: EffectControlsProps<RotateEffect>) {
   const onValueChange = (v: number) => onEffect((e) => ({ ...e, value: v }));
   return (
     <YStack>
       <GradientSlider
         label="Rotation"
         value={effect.value}
-        sliderKey={getSliderKey(scenePath, `effects:${effect.key}:value`)}
+        scenePath={scenePath}
+        fieldPath={['effects', effect.key, 'value']}
         onValueChange={onValueChange}
         sliderFields={sliderFields}
-        onSliderFields={onSliderFields}
       />
       <Group separator={<Separator vertical />} orientation="horizontal">
         <GroupItem>
@@ -774,13 +772,7 @@ function EffectRotateControls({
   );
 }
 
-function EffectHueShiftControls({
-  effect,
-  onEffect,
-  sliderFields,
-  onSliderFields,
-  scenePath,
-}: EffectControlsProps<HueShiftEffect>) {
+function EffectHueShiftControls({ effect, onEffect, sliderFields, scenePath }: EffectControlsProps<HueShiftEffect>) {
   return (
     <YStack>
       <GradientSlider
@@ -789,10 +781,10 @@ function EffectHueShiftControls({
         min={-180}
         max={180}
         value={effect.value}
-        sliderKey={getSliderKey(scenePath, `effects:${effect.key}:value`)}
+        scenePath={scenePath}
+        fieldPath={['effects', effect.key, 'value']}
         onValueChange={(v) => onEffect((e) => ({ ...e, value: v }))}
         sliderFields={sliderFields}
-        onSliderFields={onSliderFields}
       />
     </YStack>
   );
@@ -803,11 +795,6 @@ const LayerMixOptions = [
   { key: 'mask', label: 'Mask' },
   { key: 'add', label: 'Add' },
 ] as const;
-
-function getSliderKey(scenePath: string[], fieldName: string) {
-  const innerScenePath = scenePath.slice(1);
-  return [...innerScenePath, fieldName].join(':');
-}
 
 function getSliderFieldUpdater(scenePath: string[]) {
   return (update: (m: SliderFields) => SliderFields) => {
@@ -859,7 +846,8 @@ function LayerControls({
             label={`${blendMode?.label || 'Blend'} Amount`}
             value={layer.blendAmount}
             sliderFields={sliderFields}
-            sliderKey={getSliderKey([...scenePath, `layer_${layerKey}`], 'blendAmount')}
+            scenePath={scenePath}
+            fieldPath={[`layer_${layerKey}`, 'blendAmount']}
             onValueChange={(v) => {
               onScene((scene) => {
                 if (scene.type !== 'layers') return scene;
@@ -869,7 +857,6 @@ function LayerControls({
                 };
               });
             }}
-            onSliderFields={getSliderFieldUpdater(scenePath)}
           />
         </>
       )}
@@ -931,12 +918,12 @@ function GradientSlider({
   label,
   value,
   onValueChange,
-  step,
-  min,
-  max,
+  step = 0.01,
+  min = 0,
+  max = 1,
   sliderFields,
-  sliderKey,
-  onSliderFields,
+  scenePath,
+  fieldPath,
 }: {
   label: string;
   value: number;
@@ -945,39 +932,109 @@ function GradientSlider({
   min?: number;
   max?: number;
   sliderFields?: SliderFields;
-  onSliderFields: (update: (m: SliderFields) => SliderFields) => void;
-  sliderKey: string;
+  scenePath: string[];
+  fieldPath: string[];
 }) {
+  const [rootScene, ...innerScenePath] = scenePath;
+  const sliderKey = [...innerScenePath, ...fieldPath].join(':');
   const fieldSettings = sliderFields?.[sliderKey];
   const smoothing = fieldSettings?.smoothing == null ? 0.5 : fieldSettings.smoothing;
+  const maxBounceAmount = Math.abs(max - min);
+  const bounceAmount = fieldSettings?.bounceAmount == null ? 1 : fieldSettings.bounceAmount;
+  const bounceDuration = fieldSettings?.bounceDuration == null ? 1000 : fieldSettings.bounceDuration;
+  const onSliderFields = getSliderFieldUpdater(scenePath);
   return (
-    <>
+    <YStack>
       <BottomSheet
+        frameProps={{ padding: 0 }}
         trigger={
-          <BottomSheetTriggerButton chromeless justifyContent="flex-start">
+          <BottomSheetTriggerButton
+            paddingHorizontal={0}
+            size="$2"
+            iconAfter={<LucideIcon icon="Gauge" />}
+            chromeless
+            justifyContent="flex-start"
+          >
             {label}
-            {/* <XStack>
-              <Label>{label}</Label>
-            </XStack> */}
           </BottomSheetTriggerButton>
         }
       >
-        <YStack flex={1}>
-          <Label>Smoothing</Label>
-          <SmoothSlider
-            value={smoothing == null ? 0.5 : smoothing}
-            step={0.01}
-            max={1}
-            size={50}
-            smoothing={0}
-            onValueChange={(v) => {
-              onSliderFields((fields) => ({ ...fields, [sliderKey]: { ...(fields[sliderKey] || {}), smoothing: v } }));
-            }}
-          />
-          <Section title="Dashboard">
-            <Button>Add to Dashboard</Button>
+        <SheetScrollView>
+          <Section title={label}>
+            <Label>Smoothing</Label>
+            <SmoothSlider
+              value={smoothing}
+              step={0.01}
+              max={1}
+              size={50}
+              smoothing={0}
+              onValueChange={(v) => {
+                onSliderFields((fields) => ({
+                  ...fields,
+                  [sliderKey]: { ...(fields[sliderKey] || {}), smoothing: v },
+                }));
+              }}
+            />
           </Section>
-        </YStack>
+          <Section title="Value Bounce">
+            <Label>Amount: {Math.round(bounceAmount * 10) / 10}</Label>
+            <SmoothSlider
+              value={bounceAmount}
+              step={step}
+              max={maxBounceAmount}
+              min={-maxBounceAmount}
+              size={50}
+              smoothing={0}
+              onValueChange={(v) => {
+                onSliderFields((fields) => ({
+                  ...fields,
+                  [sliderKey]: { ...(fields[sliderKey] || {}), bounceAmount: v },
+                }));
+              }}
+            />
+            <Label>Duration: {Math.round(bounceDuration / 100) / 10} sec</Label>
+            <SmoothSlider
+              value={bounceDuration}
+              max={6_000}
+              min={0}
+              step={10}
+              size={50}
+              smoothing={0}
+              onValueChange={(v) => {
+                onSliderFields((fields) => ({
+                  ...fields,
+                  [sliderKey]: { ...(fields[sliderKey] || {}), bounceDuration: v },
+                }));
+              }}
+            />
+            <Button
+              onPress={() => {
+                const fullBounceKey = [...scenePath, ...fieldPath].join(':');
+                bounceTimes[fullBounceKey] = Date.now();
+              }}
+            >
+              Trigger Bounce
+            </Button>
+          </Section>
+          <Section title="Dashboard">
+            <Button
+              onPress={async () => {
+                await addSliderToDashboard(scenePath, fieldPath);
+                return response(toast(`Added ${label} Slider to Dashboard`));
+              }}
+            >
+              Add Slider to Dashboard
+            </Button>
+            <Button
+              onPress={async () => {
+                await addBounceToDashboard(scenePath, fieldPath);
+                return response(toast(`Added ${label} Bounce Button to Dashboard`));
+              }}
+            >
+              Add Bounce to Dashboard
+            </Button>
+          </Section>
+        </SheetScrollView>
       </BottomSheet>
       <SmoothSlider
         value={value}
@@ -988,7 +1045,7 @@ function GradientSlider({
         size={50}
         smoothing={smoothing}
       />
-    </>
+    </YStack>
   );
 }
 
@@ -1162,27 +1219,27 @@ function ColorScreen({ scene, onScene, controlPath, extraControls, sliderFields 
           label={`Hue`}
           value={scene.h}
           sliderFields={sliderFields}
-          sliderKey={getSliderKey(controlPath, 'h')}
+          scenePath={controlPath}
+          fieldPath={['h']}
           max={360}
           step={1}
           onValueChange={(v) => onScene((s) => ({ ...s, h: v }))}
-          onSliderFields={getSliderFieldUpdater(controlPath)}
         />
         <GradientSlider
           label={`Saturation`}
           value={scene.s}
           sliderFields={sliderFields}
-          sliderKey={getSliderKey(controlPath, 's')}
+          scenePath={controlPath}
+          fieldPath={['s']}
           onValueChange={(v) => onScene((s) => ({ ...s, s: v }))}
-          onSliderFields={getSliderFieldUpdater(controlPath)}
         />
         <GradientSlider
           label={`Brightness`}
           value={scene.l}
           sliderFields={sliderFields}
-          sliderKey={getSliderKey(controlPath, 'l')}
+          scenePath={controlPath}
+          fieldPath={['h']}
           onValueChange={(v) => onScene((s) => ({ ...s, l: v }))}
-          onSliderFields={getSliderFieldUpdater(controlPath)}
         />
 
         {extraControls}

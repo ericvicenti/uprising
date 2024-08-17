@@ -1,104 +1,22 @@
 import { createWSServer } from '@rise-tools/server';
-import { randomUUID } from 'crypto';
-import { existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync, writeFile, writeFileSync } from 'fs';
-import { join } from 'path';
 
-import { AudioPlayer, playAudio } from './audio-playback';
 import { eg as egInfo } from './eg';
 import { getEGLiveFrame, getEGReadyFrame, getSequenceActiveItem } from './eg-main';
-import { getMidiFields } from './eg-midi-fields';
 import { egSacnService } from './eg-sacn';
-import { egVideo, mainVideo } from './eg-video-playback';
+import { mainVideo } from './eg-video-playback';
 import { createEGViewServer } from './eg-view-server';
-import {
-  DashboardItem,
-  defaultMainState,
-  Effect,
-  MainState,
-  MainStateSchema,
-  Scene,
-  SliderField,
-} from './state-schema';
-import { models } from './models';
-import { mainState, mainStateUpdate } from './state';
-import { libraryPath, mainStatePath, mediaPath, statePath } from './paths';
 import { initMidiController } from './midi';
+import { models } from './models';
+import { bounceTimes, mainState, mainStateUpdate } from './state';
+import { MainState, Scene } from './state-schema';
 
-// initMidiController();
-
-// let mainState: MainState = defaultMainState;
-
-// if (!existsSync(statePath)) {
-//   mkdirSync(statePath);
-// }
-
-// // Load previous state if there's one present
-// if (existsSync(mainStatePath)) {
-//   try {
-//     const mainStateJson = readFileSync(mainStatePath, { encoding: 'utf-8' });
-//     const state = MainStateSchema.safeParse(JSON.parse(mainStateJson));
-//     if (!state.success) {
-//       throw new Error('Invalid saved state: ' + state.error.message);
-//     }
-//     if (!state.data) {
-//       throw new Error('Invalid saved state');
-//     }
-//     mainState = state.data;
-//   } catch (e) {
-//     console.warn('Could not load main state. Creating new one.');
-//   }
-// }
-
-let libraryKeys: string[] = [];
-if (existsSync(libraryPath)) {
-  libraryKeys = readdirSync(libraryPath).map((file) => file.replace('.json', ''));
-} else {
-  mkdirSync(libraryPath);
-}
-
-setInterval(() => {
-  libraryKeys = readdirSync(libraryPath).map((file) => file.replace('.json', ''));
-  // updateLibraryUI();
-}, 1000);
-
-function updateLibraryKeys(updater: (keys: string[]) => string[]) {
-  libraryKeys = updater(libraryKeys);
-  // updateLibraryUI();
-}
-type LibraryItem = {
-  media: Media;
-  sliders: Record<string, SliderField>;
-  dashboard: DashboardItem[];
-};
-
-function saveMedia(key: string, item: LibraryItem) {
-  const realKey = key.replaceAll('/', '.');
-  const newMediaLocation = join(libraryPath, `${realKey}.json`);
-  writeFileSync(newMediaLocation, JSON.stringify(item, null, 2), {});
-  updateLibraryKeys((keys) => [...keys, realKey]);
-}
-
-function readLibraryKey(key: string): LibraryItem | null {
-  const newMediaLocation = join(libraryPath, `${key}.json`);
-  const mediaJson = readFileSync(newMediaLocation, { encoding: 'utf-8' });
-  return JSON.parse(mediaJson);
-}
-
-function deleteLibraryKey(key: string) {
-  const newMediaLocation = join(libraryPath, `${key}.json`);
-  if (existsSync(newMediaLocation)) {
-    updateLibraryKeys((keys) => keys.filter((k) => k !== key));
-    unlinkSync(newMediaLocation);
-    return;
-  }
-}
+initMidiController();
 
 const sacn = egSacnService(egInfo);
 const liveViewServer = createEGViewServer(3889);
 const readyViewServer = createEGViewServer(3888);
 
 const recentGradientValues: Record<string, number> = {};
-const bounceTimes: Record<string, number> = {};
 
 function mainLoop() {
   const nowTime = Date.now();
@@ -165,104 +83,6 @@ function performMainLoopStep(inMs: number) {
     performMainLoopStep(Math.max(1, frameIdealStartTime - afterFrameTime));
   }, inMs);
 }
-
-// wsServer.update("startTime", startTime);
-
-// function updateSceneUI(
-//   mediaKey: string,
-//   sceneState: Media,
-//   uiContext: UIContext,
-//   childrenOnly?: boolean
-// ) {
-//   // console.log('updateSceneUI', mediaKey, childrenOnly, sceneState)
-//   if (!childrenOnly)
-//     wsServer.update(mediaKey, getSceneUI(mediaKey, sceneState, uiContext));
-//   if (sceneState.type === "video") {
-//     wsServer.update(
-//       `${mediaKey}.effects`,
-//       getEffectsUI(mediaKey, sceneState.effects, uiContext)
-//     );
-//     sceneState.effects?.forEach((effect) => {
-//       wsServer.update(
-//         `${mediaKey}.effects.${effect.key}`,
-//         getEffectUI(`${mediaKey}.effects.${effect.key}`, effect, uiContext)
-//       );
-//     });
-//     return;
-//   }
-//   if (sceneState.type === "layers") {
-//     sceneState.layers?.forEach((layer) => {
-//       // console.log('layer UI', layer.key)
-//       const layerKey = `${mediaKey}.layer.${layer.key}`;
-//       wsServer.update(layerKey, getSceneLayerUI(layerKey, layer, uiContext));
-//       updateSceneUI(layerKey, layer.media, uiContext, true);
-//     });
-//     return;
-//   }
-//   if (sceneState.type === "sequence") {
-//     sceneState.sequence?.forEach((sequenceItem) => {
-//       const sequenceItemKey = `${mediaKey}.item.${sequenceItem.key}`;
-//       wsServer.update(
-//         sequenceItemKey,
-//         getSceneSequenceUI(sequenceItemKey, sequenceItem, uiContext)
-//       );
-//       updateSceneUI(sequenceItemKey, sequenceItem.media, uiContext, true);
-//     });
-//     return;
-//   }
-// }
-
-// const uiContext: UIContext = { video, mainState, libraryKeys };
-
-// function updateUI() {
-//   uiContext.mainState = mainState;
-//   uiContext.libraryKeys = libraryKeys;
-//   wsServer.update("mainState", mainState);
-//   wsServer.updateRoot(getUIRoot(mainState, uiContext));
-//   wsServer.update(
-//     "liveDashboard",
-//     getDashboardUI(mainState, uiContext, "liveScene")
-//   );
-//   wsServer.update(
-//     "readyDashboard",
-//     getDashboardUI(mainState, uiContext, "readyScene")
-//   );
-//   // wsServer.update('quickEffects', getQuickEffects())
-//   // wsServer.update('beatEffects', getBeatEffects(mainState))
-//   updateSceneUI("readyScene", mainState.readyScene, uiContext);
-//   updateSceneUI("liveScene", mainState.liveScene, uiContext);
-// }
-
-// function updateLibraryUI() {
-//   wsServer.update(
-//     "libraryItems",
-//     libraryKeys.map((key) => ({
-//       key,
-//       label: key,
-//     }))
-//   );
-//   wsServer.update("library", getLibraryUI(libraryKeys));
-//   libraryKeys.forEach((key) => {
-//     wsServer.update(`library.${key}`, getLibraryKeyUI(key));
-//   });
-// }
-
-// updateLibraryUI();
-// updateUI();
-
-// let mainStateToDiskTimeout: undefined | NodeJS.Timeout = undefined;
-
-// function mainStateUpdate(updater: (state: MainState) => MainState) {
-//   clearTimeout(mainStateToDiskTimeout);
-//   const prevState = mainState;
-//   mainState = updater(mainState);
-//   updateUI();
-//   mainStateToDiskTimeout = setTimeout(() => {
-//     writeFile(mainStatePath, JSON.stringify(mainState), () => {});
-//   }, 500);
-//   mainStateEffect(mainState, prevState);
-//   midiDashboard = getMidiFields(mainState);
-// }
 
 const sequenceTransitionEnds: Record<string, undefined | NodeJS.Timeout> = {};
 const sequenceAutoTransitions: Record<string, undefined | NodeJS.Timeout> = {};
@@ -843,10 +663,6 @@ function matchActiveScene(
 //   console.warn(
 //     "Cannot add to dash from to non-media. hide this button from the UI."
 //   );
-// }
-
-// function bounceField(key: string) {
-//   bounceTimes[key] = Date.now();
 // }
 
 // function handleEffectEvent(event: ActionEvent): boolean {

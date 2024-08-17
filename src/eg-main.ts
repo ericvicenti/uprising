@@ -213,7 +213,7 @@ function applyGradientValue(destValue: number, valuePath: string, ctx: StateCont
   ctx.recentGradientValues[valuePath] = nextValue;
   const lastBounceTime = ctx.bounceTimes[valuePath];
   const bounceAmount = slider?.bounceAmount || DefaultBounceAmount;
-  const bounceDuration = (slider?.bounceDuration || DefaultBounceDuration) * 1000;
+  const bounceDuration = slider?.bounceDuration || DefaultBounceDuration;
   const now = Date.now();
   const bounceProgress = lastBounceTime ? (now - lastBounceTime) / bounceDuration : 0;
   // if (lastBounceTime) console.log('lastBounceTime', { valuePath, lastBounceTime, bounceProgress })
@@ -317,7 +317,7 @@ function layersFrame(scene: LayersScene, ctx: StateContext, controlPath: string)
   const reverseLayers = scene.layers.slice(0, -1).reverse();
   const firstLayer = scene.layers.at(-1);
   if (!firstLayer) return blackFrame;
-  let frame = mediaFrame(firstLayer.scene, ctx, `${controlPath}.layer.${firstLayer.key}`);
+  let frame = mediaFrame(firstLayer.scene, ctx, `${controlPath}:layer_${firstLayer.key}`);
   reverseLayers.forEach((layer) => {
     const layerKey = `${controlPath}:layer_${layer.key}`;
     const layerAmount = applyGradientValue(layer.blendAmount, `${layerKey}:blendAmount`, ctx);

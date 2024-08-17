@@ -3,7 +3,7 @@ import { randomUUID } from 'crypto';
 import { existsSync } from 'fs';
 import { readFile, writeFile } from 'fs/promises';
 import { mainStatePath } from './paths';
-import { defaultMainState, Effect, MainState, MainStateSchema, Scene } from './state-schema';
+import { Dashboard, defaultMainState, Effect, MainState, MainStateSchema, Scene } from './state-schema';
 
 const [_mainState, setMainState] = state<MainState | null>(null);
 
@@ -133,6 +133,8 @@ function drillMainSceneState(state: MainState | null, path: string[]): Scene | n
   return null;
 }
 
+export const bounceTimes: Record<string, number> = {};
+
 export const sceneState = lookup((controlPath) => {
   return view(
     (get) => {
@@ -158,13 +160,72 @@ export const sliderFields = lookup((key) => {
 export const dashboards = lookup((key) => {
   return view(
     (get) => {
-      if (key === 'live') return get(mainState)?.liveDashboard;
-      if (key === 'ready') return get(mainState)?.readyDashboard;
+      const state = get(mainState);
+      if (!state) return undefined;
+      if (key === 'live') return getDashboardState(state.liveScene, state.liveDashboard, 'live');
+      if (key === 'ready') return getDashboardState(state.readyScene, state.readyDashboard, 'ready');
       return undefined;
     },
     { compare: true }
   );
 });
+
+export function startAutoTransition() {
+  mainStateUpdate((state) => ({
+    ...state,
+    transitionState: {
+      ...state.transitionState,
+      autoStartTime: Date.now(),
+    },
+  }));
+}
+
+export type DashboardState = {
+  items: DashboardStateItem[];
+};
+export type DashboardStateItem = {
+  key: string;
+  type: 'button';
+  field: string;
+  behvaior: 'bounce' | 'goNext';
+  locationLabel: string;
+  behaviorLabel: string;
+  dashboardId: 'live' | 'ready';
+};
+
+function getDashboardState(scene: Scene, dashboard: Dashboard, dashboardId: 'live' | 'ready'): DashboardState {
+  const items: DashboardStateItem[] = [];
+  dashboard.forEach((item) => {
+    if (item.behavior === 'bounce') {
+      let locationLabel = '';
+      let walkScene = scene;
+      item.field.split(':').forEach((fieldKey) => {});
+      items.push({
+        key: item.key,
+        field: item.field,
+        dashboardId,
+        behvaior: 'bounce',
+        type: 'button',
+        behaviorLabel: 'Bounce' + item.field,
+        locationLabel: 'Live',
+      });
+    }
+  });
+  return {
+    items,
+  };
+}
+
+export function dashboardButtonPress(item: DashboardStateItem) {
+  if (item.behvaior === 'bounce') {
+    bounceField(item.dashboardId, item.field);
+  }
+}
+
+export function bounceField(rootSceneId: 'live' | 'ready', fieldPath: string) {
+  const key = `${rootSceneId}:${fieldPath}`;
+  bounceTimes[key] = Date.now();
+}
 
 export function createBlankScene(type: Scene['type']): Scene {
   if (type === 'off') {
@@ -235,4 +296,43 @@ export function createBlankEffect(type: Effect['type']): Effect {
     key: randomUUID(),
     type: 'invert',
   };
+}
+
+export async function addBounceToDashboard(scenePath: string[], fieldPath: string[]) {
+  console.log('addBounceToDashboard', scenePath, fieldPath);
+  mainStateUpdate((state) => {
+    const [rootSceneKey, ...innerScenePath] = scenePath;
+    const dashboardKey = rootSceneKey === 'live' ? 'liveDashboard' : 'readyDashboard';
+    const prevDashboard = state[dashboardKey];
+    return {
+      ...state,
+      [dashboardKey]: [
+        ...prevDashboard,
+        {
+          key: randomUUID(),
+          field: [...innerScenePath, ...fieldPath].join(':'),
+          behavior: 'bounce',
+        },
+      ],
+    };
+  });
+}
+
+export async function addSliderToDashboard(scenePath: string[], fieldPath: string[]) {
+  mainStateUpdate((state) => {
+    const [rootSceneKey, ...innerScenePath] = scenePath;
+    const dashboardKey = rootSceneKey === 'live' ? 'liveDashboard' : 'readyDashboard';
+    const prevDashboard = state[dashboardKey];
+    return {
+      ...state,
+      [dashboardKey]: [
+        ...prevDashboard,
+        {
+          key: randomUUID(),
+          field: [...innerScenePath, ...fieldPath].join(':'),
+          behavior: 'slider',
+        },
+      ],
+    };
+  });
 }

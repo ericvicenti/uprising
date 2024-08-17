@@ -225,9 +225,9 @@ export type SliderField = z.infer<typeof sliderFieldSchema>;
 
 export const dashboardItemSchema = z.object({
   key: z.string(),
-  // label: z.string().optional(),
+  label: z.string().optional(),
   field: z.string(),
-  behavior: z.enum(['slider', 'bounceButton', 'goNextButton']),
+  behavior: z.enum(['slider', 'bounce', 'goNext']),
   min: z.number().optional(),
   max: z.number().optional(),
   step: z.number().optional(),
