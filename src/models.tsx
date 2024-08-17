@@ -34,7 +34,7 @@ import {
 } from '@rise-tools/kitchen-sink/server';
 import { AnimatedProgress, SmoothSlider } from '@rise-tools/kit/server';
 import { randomUUID } from 'crypto';
-import { localStateExperimental, ModelState, ref, response } from '@rise-tools/react';
+import { createComponentDefinition, localStateExperimental, ModelState, ref, response } from '@rise-tools/react';
 import { lookup, view } from '@rise-tools/server';
 import { MediaIndex, mediaIndex } from './media';
 import { createBlankEffect, createBlankScene, mainState, mainStateUpdate, sceneState, updateScene } from './state';
@@ -63,6 +63,8 @@ import { hslToHex } from './color';
 import { getSequenceActiveItem } from './eg-main';
 import { getLibraryItem, libraryIndex, writeLibraryItem } from './library';
 // import { isEqual } from 'lodash';
+
+type ReactElement = ReturnType<typeof createComponentDefinition>;
 
 function isEqual(a: any, b: any) {
   return JSON.stringify(a) === JSON.stringify(b);
@@ -363,6 +365,14 @@ const SceneTypes = [
   { key: 'sequence', label: 'Sequence' },
 ] as const;
 
+type ScreenProps = {
+  scene: Scene;
+  onScene: (update: (s: Scene) => Scene) => void;
+  controlPath: string[];
+  extraControls?: any;
+  onGetMediaIndex: () => MediaIndex | undefined;
+};
+
 function SceneScreen({
   scene,
   onScene,
@@ -373,7 +383,7 @@ function SceneScreen({
   scene: Scene | null | undefined;
   onScene: (update: (s: Scene) => Scene) => void;
   controlPath: string[];
-  extraControls?: any;
+  extraControls?: ReactElement;
   onGetMediaIndex: () => MediaIndex | undefined;
 }) {
   let screen = null;
@@ -734,35 +744,42 @@ function LayerControls({
   const layer = layersScene.layers?.find((layer) => layer.key === layerKey);
   if (!layer) return null;
   const blendMode = LayerMixOptions.find((o) => o.key === layer.blendMode);
+  const isBaseLayer = layer === layersScene.layers?.at(-1);
   return (
     <Section title="Layer">
-      {/* <SelectDropdown
-        options={LayerMixOptions}
-        onSelect={(value) => {
-          if (!value) return;
-          onScene((scene) => {
-            if (scene.type !== 'layers') return scene;
-            return {
-              ...scene,
-              layers: scene.layers?.map((l) => (l.key === layerKey ? { ...l, blendMode: value } : l)),
-            };
-          });
-        }}
-        value={layer.blendMode}
-      /> */}
-      {/* <GradientSlider
-        label={`${blendMode?.label || 'Blend'} Amount`}
-        value={layer.blendAmount}
-        onValueChange={(v) => {
-          onScene((scene) => {
-            if (scene.type !== 'layers') return scene;
-            return {
-              ...scene,
-              layers: scene.layers?.map((l) => (l.key === layerKey ? { ...l, blendAmount: v } : l)),
-            };
-          });
-        }}
-      /> */}
+      {isBaseLayer ? (
+        <Text>Base Layer</Text>
+      ) : (
+        <>
+          <SelectDropdown
+            options={LayerMixOptions}
+            onSelect={(value) => {
+              if (!value) return;
+              onScene((scene) => {
+                if (scene.type !== 'layers') return scene;
+                return {
+                  ...scene,
+                  layers: scene.layers?.map((l) => (l.key === layerKey ? { ...l, blendMode: value } : l)),
+                };
+              });
+            }}
+            value={layer.blendMode}
+          />
+          <GradientSlider
+            label={`${blendMode?.label || 'Blend'} Amount`}
+            value={layer.blendAmount}
+            onValueChange={(v) => {
+              onScene((scene) => {
+                if (scene.type !== 'layers') return scene;
+                return {
+                  ...scene,
+                  layers: scene.layers?.map((l) => (l.key === layerKey ? { ...l, blendAmount: v } : l)),
+                };
+              });
+            }}
+          />
+        </>
+      )}
       <Button
         icon={<LucideIcon icon="Trash" />}
         onPress={() => {
@@ -845,6 +862,7 @@ function GradientSlider({
         }
       >
         <YStack flex={1}>
+          <EffectSlider label="slider" value={0.5} step={0.01} onValueChange={() => {}} />
           <Section title="Dashboard">
             <Button>Add to Dashboard</Button>
           </Section>
@@ -1025,7 +1043,7 @@ function GenericSceneControls({
       <Button
         icon={<LucideIcon icon="Download" />}
         onPress={async () => {
-          await writeLibraryItem(scene);
+          await writeLibraryItem(controlPath, scene);
           return response(toast('Saved to Library'));
         }}
       >
@@ -1111,15 +1129,23 @@ function LayersScreen({
       <DraggableFlatList
         style={{ height: '100%' }}
         data={
-          scene.layers?.map((layer) => ({
-            label: (
-              <Button marginHorizontal="$4" marginVertical="$1" disabled icon={iconOfBlendMode(layer.blendMode)}>
-                {getScreenTitle(layer.scene, [...controlPath, `layer_${layer.key}`])}
-              </Button>
-            ),
-            key: layer.key,
-            // onPress: navigate(`control/${controlPath.join(':')}:layer_${layer.key}`),
-          })) || []
+          scene.layers?.map((layer) => {
+            const isBaseLayer = layer === scene.layers?.at(-1);
+            return {
+              label: (
+                <Button
+                  marginHorizontal="$4"
+                  marginVertical="$1"
+                  disabled
+                  icon={isBaseLayer ? null : iconOfBlendMode(layer.blendMode)}
+                >
+                  {getScreenTitle(layer.scene, [...controlPath, `layer_${layer.key}`])}
+                </Button>
+              ),
+              key: layer.key,
+              // onPress: navigate(`control/${controlPath.join(':')}:layer_${layer.key}`),
+            };
+          }) || []
         }
         onReorder={(keyOrder) => {
           onScene((s) => ({ ...s, layers: keyOrder.map((key) => scene.layers?.find((e) => e.key === key)!) }));
@@ -1167,7 +1193,7 @@ function NewLayerButton({
               };
               onScene((scene) => {
                 if (scene.type !== 'layers') return scene;
-                return { ...scene, layers: [...(scene.layers || []), newLayer] };
+                return { ...scene, layers: [newLayer, ...(scene.layers || [])] };
               });
               return response(navigate(`control/${controlPath.join(':')}:layer_${newLayer.key}`));
             }}
@@ -1299,7 +1325,6 @@ function VideoScreen({
         {/* <Text>{JSON.stringify(index?.files)}</Text> */}
         <EffectsButton controlPath={controlPath} />
       </YStack>
-
       {extraControls}
       <Separator marginBottom="$4" />
       <YStack marginHorizontal="$4" gap="$4">
