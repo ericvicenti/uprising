@@ -3,6 +3,7 @@ import { libraryPath } from './paths';
 import { readdir, writeFile, readFile } from 'fs/promises';
 import { join } from 'path';
 import { Scene, sceneSchema } from './state-schema';
+import { mainState } from './state';
 
 export const libraryIndex = query(async () => {
   const libraryItems = await readdir(libraryPath);
@@ -12,10 +13,17 @@ export const libraryIndex = query(async () => {
   return library;
 });
 
-export async function writeLibraryItem(scene: Scene) {
+export async function writeLibraryItem(controlPath: string[], scene: Scene) {
+  const state = mainState.get();
+  if (!state) throw new Error('Main state not ready');
+  const rootKey = controlPath[0];
+  const dashboard = rootKey === 'live' ? state.liveDashboard : state.readyDashboard;
+  const sliderFields = rootKey === 'live' ? state.liveSliderFields : state.readySliderFields;
+  const libraryItem = { scene, dashboard, sliderFields };
+
   const name = scene.label || `${getSceneTitle(scene)} - ${new Date().toLocaleString()}`;
 
-  await writeFile(join(libraryPath, `${name}.json`), JSON.stringify(scene));
+  await writeFile(join(libraryPath, `${name}.json`), JSON.stringify(libraryItem));
   libraryIndex.invalidate();
 }
 
