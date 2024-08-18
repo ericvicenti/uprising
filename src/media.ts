@@ -78,6 +78,24 @@ export async function deleteMediaFile(id: string) {
   });
 }
 
+export async function duplicateFile(id: string) {
+  await updateMediaIndex((index) => {
+    const file = index.files.find((file) => file.id === id);
+    if (!file) return index;
+    return {
+      ...index,
+      files: [
+        ...index.files,
+        {
+          ...file,
+          id: randomUUID(),
+          title: `${file.title} (copy)`,
+        },
+      ],
+    };
+  });
+}
+
 export type ImportState = {
   importing: { url: string; id: string; state: string }[];
 };

@@ -33,7 +33,7 @@ import { randomUUID } from 'crypto';
 import { hslToHex } from './color';
 import { getSequenceActiveItem } from './eg-main';
 import { mainVideo } from './eg-video-playback';
-import { getLibraryItem, libraryIndex, writeLibraryItem } from './library';
+import { deleteLibraryItem, getLibraryItem, libraryIndex, renameLibraryItem, writeLibraryItem } from './library';
 import {
   deleteMediaFile,
   duplicateFile,
@@ -167,18 +167,21 @@ export const models = {
       { compare: isEqual }
     )
   ),
-  browse_library: view(
-    (get) => {
-      const lib = get(libraryIndex);
-      return (
-        <ScrollView>
-          <YStack gap="$4" padding="$4">
-            {lib?.map((file) => <Button onPress={() => {}}>{file}</Button>)}
-          </YStack>
-        </ScrollView>
-      );
-    },
-    { compare: isEqual }
+  browse_library: lookup((libraryId) =>
+    view(
+      (get) => {
+        if (libraryId !== '') return <LibraryItemScreen item={libraryId} />;
+        const lib = get(libraryIndex);
+        return (
+          <ScrollView>
+            <YStack gap="$4" padding="$4">
+              {lib?.map((file) => <Button onPress={navigate(`browse_library/${file}`)}>{file}</Button>)}
+            </YStack>
+          </ScrollView>
+        );
+      },
+      { compare: isEqual }
+    )
   ),
   reset_scene: lookup((scenePathStr) =>
     view((get) => {
@@ -193,6 +196,23 @@ export const models = {
         }
       ) => {
         updateScene(scenePath, () => scene);
+        if (scenePathStr === 'live') {
+          mainStateUpdate((state) => {
+            return {
+              ...state,
+              liveDashboard: meta?.dashboard || [],
+              liveSliderFields: meta?.sliderFields || {},
+            };
+          });
+        } else if (scenePathStr === 'ready') {
+          mainStateUpdate((state) => {
+            return {
+              ...state,
+              readyDashboard: meta?.dashboard || [],
+              readySliderFields: meta?.sliderFields || {},
+            };
+          });
+        }
       };
       return <NewScenePicker onScene={onScene} library={lib} media={media} />;
     })
@@ -218,7 +238,6 @@ export const models = {
                   blendAmount: 0,
                 };
                 navigatePath = `${scenePath}:layer_${key}`;
-                console.log('new layer', navigatePath);
                 return { ...scene, layers: [newLayer, ...(scene.layers || [])] };
               }
               if (scene.type === 'sequence') {
@@ -231,7 +250,6 @@ export const models = {
               }
               return scene;
             });
-            console.log('ok, navigatePath', navigatePath);
             if (navigatePath) {
               return response(navigate(`control/${navigatePath}`));
             }
@@ -340,6 +358,50 @@ export const models = {
     );
   }),
 };
+
+function LibraryItemScreen({ item }: { item: string }) {
+  return (
+    <ScrollView>
+      <StackScreen title={item} />
+      <Button
+        onPress={async () => {
+          const itemValue = await getLibraryItem(item);
+          mainStateUpdate((state) => {
+            return {
+              ...state,
+              readyScene: itemValue.scene,
+              readyDashboard: itemValue.dashboard,
+              readySliderFields: itemValue.sliderFields,
+            };
+          });
+          return response(navigate('control/ready'));
+        }}
+        icon={<LucideIcon icon="PlayCircle" />}
+      >
+        Play on Ready
+      </Button>
+      <Section title="Rename Item">
+        <RiseForm
+          onSubmit={async (values) => {
+            await renameLibraryItem(item, values.label);
+            return response(goBack());
+          }}
+        >
+          <InputField id="label" label="Name" value={item} />
+          <SubmitButton>Rename</SubmitButton>
+        </RiseForm>
+      </Section>
+      <Button
+        onPress={async () => {
+          await deleteLibraryItem(item);
+          return response(goBack());
+        }}
+      >
+        Delete from Library
+      </Button>
+    </ScrollView>
+  );
+}
 
 function NewScenePicker({
   onScene,
@@ -465,7 +527,7 @@ function MediaFileScreen({ file }: { file: MediaFile | undefined }) {
             await renameMediaFile(file.id, values.title);
           }}
         >
-          <InputField id="title" value={file.title} />
+          <InputField id="title" label="Name" value={file.title} />
           <SubmitButton>Rename</SubmitButton>
         </RiseForm>
       </Section>
@@ -1530,7 +1592,9 @@ function NewSequenceItem({
 }) {
   return (
     <BottomSheet
-      trigger={<BottomSheetTriggerButton icon={<LucideIcon icon="PlusCircle" />}>New Layer</BottomSheetTriggerButton>}
+      trigger={
+        <BottomSheetTriggerButton icon={<LucideIcon icon="PlusCircle" />}>New Sequence Scene</BottomSheetTriggerButton>
+      }
     >
       {ref('add_scene/' + controlPath.join(':'))}
     </BottomSheet>

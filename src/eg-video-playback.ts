@@ -8,6 +8,7 @@ import { EGInfo } from './eg';
 import { Frame } from './eg-sacn';
 import { mediaPath } from './paths';
 import { MediaFile, mediaIndex } from './media';
+import { createSolidRGBFrame } from './eg-tools';
 
 export type VideoPlaybackInstance = {
   readFrame: () => Frame | null;
@@ -17,7 +18,7 @@ export type VideoPlaybackInstance = {
   frameCount: number;
   isForward: boolean;
   playingFrame: number | null;
-  info: MediaFile;
+  info: MediaFile | null;
 };
 
 export type VideoPlayer = {
@@ -39,6 +40,8 @@ export type PlaybackParams = {
 const openFile = promisify(fs.open);
 
 export type EGVideo = ReturnType<typeof egVideo>;
+
+const blackFrame = createSolidRGBFrame(egInfo, 0, 0, 0);
 
 export function egVideo(
   eg: EGInfo,
@@ -73,7 +76,16 @@ export function egVideo(
     let playCount = 0;
     const framesFile = file?.egFramesFile;
     if (!framesFile) {
-      throw new Error('No frames file found for ' + mediaId);
+      return {
+        readFrame: () => blackFrame,
+        consumeFrame: () => blackFrame,
+        restart: () => {},
+        setParams: () => {},
+        frameCount: 0,
+        isForward: true,
+        playingFrame: null,
+        info: null,
+      };
     }
     const framesFilePath = join(mediaPath, framesFile);
     const fileInfo = await stat(framesFilePath);
