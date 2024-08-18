@@ -12,6 +12,7 @@ import {
   InputField,
   Label,
   LucideIcon,
+  openURL,
   RiseForm,
   ScrollView,
   Separator,
@@ -33,7 +34,17 @@ import { hslToHex } from './color';
 import { getSequenceActiveItem } from './eg-main';
 import { mainVideo } from './eg-video-playback';
 import { getLibraryItem, libraryIndex, writeLibraryItem } from './library';
-import { importMedia, importState, MediaIndex, mediaIndex } from './media';
+import {
+  deleteMediaFile,
+  duplicateFile,
+  importMedia,
+  ImportState,
+  importState,
+  MediaFile,
+  MediaIndex,
+  mediaIndex,
+  renameMediaFile,
+} from './media';
 import {
   addBounceToDashboard,
   addSliderToDashboard,
@@ -76,8 +87,6 @@ import {
   VideoScene,
 } from './state-schema';
 // import { isEqual } from 'lodash';
-
-type ReactElement = ReturnType<typeof createComponentDefinition>;
 
 function isEqual(a: any, b: any) {
   return JSON.stringify(a) === JSON.stringify(b);
@@ -146,40 +155,17 @@ export const models = {
       <DashboardScreen dashboardKey={dashboardKey} dashboard={dashboard ? get(dashboard) : undefined} />
     ));
   }),
-  browse_videos: view(
-    (get) => {
-      const media = get(mediaIndex);
-      return (
-        <ScrollView>
-          <YStack gap="$4" padding="$4">
-            {media?.files?.map((file) => <Button onPress={() => {}}>{file.title}</Button>)}
-          </YStack>
-          <Section title="Import">
-            <RiseForm
-              onSubmit={(values) => {
-                importMedia(values.url)
-                  .then(() => {
-                    // console.log('done.');
-                  })
-                  .catch((e) => {
-                    console.error(e);
-                  });
-              }}
-            >
-              <InputField id="url" label="URL" />
-              <SubmitButton>Start Import</SubmitButton>
-            </RiseForm>
-            {get(importState)?.importing?.map((importItem) => (
-              <YStack marginVertical="$3">
-                <Text>{importItem.url}</Text>
-                <Text color="$color8">{importItem.state}</Text>
-              </YStack>
-            ))}
-          </Section>
-        </ScrollView>
-      );
-    },
-    { compare: isEqual }
+  browse_videos: lookup((fileId) =>
+    view(
+      (get) => {
+        const media = get(mediaIndex);
+        if (fileId !== '') return <MediaFileScreen file={media?.files.find((file) => file.id === fileId)} />;
+        const importing = get(importState);
+
+        return <BrowseMediaScreen media={media} importing={importing} />;
+      },
+      { compare: isEqual }
+    )
   ),
   browse_library: view(
     (get) => {
@@ -199,63 +185,63 @@ export const models = {
       const scenePath = scenePathStr.split(':');
       const lib = get(libraryIndex);
       const media = get(mediaIndex);
+      const onScene = (
+        scene: Scene,
+        meta?: {
+          dashboard?: Dashboard;
+          sliderFields?: SliderFields;
+        }
+      ) => {
+        updateScene(scenePath, () => scene);
+      };
+      return <NewScenePicker onScene={onScene} library={lib} media={media} />;
+    })
+  ),
+  add_scene: lookup((scenePath) =>
+    view((get) => {
+      const lib = get(libraryIndex);
+      const media = get(mediaIndex);
+
       return (
-        <SheetScrollView>
-          <YStack>
-            <Section title="Media">
-              {media?.files?.map((file) => (
-                <BottomSheetCloseButton
-                  key={`media-${file.id}`}
-                  onPress={() => {
-                    updateScene(scenePath, () => ({
-                      ...createBlankScene('video'),
-                      track: file.id,
-                      label: file.title,
-                    }));
-                  }}
-                >
-                  {file.title}
-                </BottomSheetCloseButton>
-              ))}
-            </Section>
-            <Section title="Library">
-              {lib?.map((libraryItem) => (
-                <BottomSheetCloseButton
-                  key={`lib-${libraryItem}`}
-                  onPress={() => {
-                    getLibraryItem(libraryItem)
-                      .then((scene) => {
-                        // todo: if scenePath === ['live'] or ['ready'] then update the dashboard and sliderFields
-                        updateScene(scenePath, () => scene);
-                      })
-                      .catch((e) => {
-                        console.error('Failed to load library item ' + libraryItem);
-                        console.error(e);
-                      });
-                  }}
-                >
-                  {libraryItem}
-                </BottomSheetCloseButton>
-              ))}
-            </Section>
-            <Section title="New Scene">
-              {SceneTypes.map(({ key, label }) => (
-                <BottomSheetCloseButton
-                  key={`new-${key}`}
-                  onPress={() => {
-                    updateScene(scenePath, () => createBlankScene(key));
-                  }}
-                >
-                  {label}
-                </BottomSheetCloseButton>
-              ))}
-            </Section>
-          </YStack>
-        </SheetScrollView>
+        <NewScenePicker
+          library={lib}
+          media={media}
+          onScene={(newChildScene) => {
+            const key = randomUUID();
+            let navigatePath: string | undefined = undefined;
+            updateScene(scenePath.split(':'), (scene: Scene) => {
+              if (scene.type === 'layers') {
+                const newLayer: Layer = {
+                  scene: newChildScene,
+                  key,
+                  blendMode: 'mix',
+                  blendAmount: 0,
+                };
+                navigatePath = `${scenePath}:layer_${key}`;
+                console.log('new layer', navigatePath);
+                return { ...scene, layers: [newLayer, ...(scene.layers || [])] };
+              }
+              if (scene.type === 'sequence') {
+                const newItem: SequenceItem = {
+                  scene: newChildScene,
+                  key,
+                };
+                navigatePath = `${scenePath}:item_${key}`;
+                return { ...scene, sequence: [...(scene.sequence || []), newItem] };
+              }
+              return scene;
+            });
+            console.log('ok, navigatePath', navigatePath);
+            if (navigatePath) {
+              return response(navigate(`control/${navigatePath}`));
+            }
+          }}
+        />
       );
     })
   ),
   control: lookup((controlPath) => {
+    console.log('control', controlPath);
     const path = controlPath.split(':');
     const { scenePath, restPath } = unpackControlPath(path);
     const scene = sceneState.get(scenePath.join(':'));
@@ -354,6 +340,154 @@ export const models = {
     );
   }),
 };
+
+function NewScenePicker({
+  onScene,
+  media,
+  library,
+}: {
+  onScene: (scene: Scene, other?: { dashboard?: Dashboard; sliderFields?: SliderFields }) => void;
+  media: MediaIndex | undefined;
+  library?: string[];
+}) {
+  return (
+    <SheetScrollView>
+      <YStack>
+        <Section title="Media">
+          {media?.files?.map((file) => (
+            <BottomSheetCloseButton
+              key={`media-${file.id}`}
+              onPress={() => {
+                return onScene({
+                  ...createBlankScene('video'),
+                  track: file.id,
+                  label: file.title,
+                });
+              }}
+            >
+              {file.title}
+            </BottomSheetCloseButton>
+          ))}
+        </Section>
+        <Section title="Library">
+          {library?.map((libraryItem) => (
+            <BottomSheetCloseButton
+              key={`lib-${libraryItem}`}
+              onPress={async () => {
+                const item = await getLibraryItem(libraryItem);
+                return onScene(item.scene, { dashboard: item.dashboard, sliderFields: item.sliderFields });
+              }}
+            >
+              {libraryItem}
+            </BottomSheetCloseButton>
+          ))}
+        </Section>
+        <Section title="New Scene">
+          {SceneTypes.map(({ key, label }) => (
+            <BottomSheetCloseButton
+              key={`new-${key}`}
+              onPress={() => {
+                return onScene(createBlankScene(key));
+              }}
+            >
+              {label}
+            </BottomSheetCloseButton>
+          ))}
+        </Section>
+      </YStack>
+    </SheetScrollView>
+  );
+}
+
+function BrowseMediaScreen({
+  media,
+  importing,
+}: {
+  media: MediaIndex | undefined;
+  importing: ImportState | null | undefined;
+}) {
+  return (
+    <ScrollView>
+      <YStack gap="$4" padding="$4">
+        {media?.files?.map((file) => <Button onPress={navigate(`browse_videos/${file.id}`)}>{file.title}</Button>)}
+      </YStack>
+      <Section title="Import">
+        <RiseForm
+          onSubmit={(values) => {
+            importMedia(values.url)
+              .then(() => {
+                // console.log('done.');
+              })
+              .catch((e) => {
+                console.error(e);
+              });
+          }}
+        >
+          <InputField id="url" label="URL" />
+          <SubmitButton>Start Import</SubmitButton>
+        </RiseForm>
+        {importing?.importing?.map((importItem) => (
+          <YStack marginVertical="$3">
+            <Text>{importItem.url}</Text>
+            <Text color="$color8">{importItem.state}</Text>
+          </YStack>
+        ))}
+      </Section>
+    </ScrollView>
+  );
+}
+
+function MediaFileScreen({ file }: { file: MediaFile | undefined }) {
+  if (!file) return <SizableText>No File</SizableText>;
+  return (
+    <ScrollView>
+      <StackScreen title={file.title} />
+      <YStack gap="$4" padding="$4">
+        <Text>{file.title}</Text>
+        <Text color="$blue9" onPress={openURL(file.sourceUrl)}>
+          {file.sourceUrl}
+        </Text>
+        <Button
+          icon={<LucideIcon icon="PlayCircle" />}
+          onPress={() => {
+            mainStateUpdate((state) => {
+              return { ...state, readyScene: { ...createBlankScene('video'), track: file.id, label: file.title } };
+            });
+            return response(navigate('control/ready'));
+          }}
+        >
+          Play on Ready
+        </Button>
+      </YStack>
+      <Section title="Rename File">
+        <RiseForm
+          onSubmit={async (values) => {
+            await renameMediaFile(file.id, values.title);
+          }}
+        >
+          <InputField id="title" value={file.title} />
+          <SubmitButton>Rename</SubmitButton>
+        </RiseForm>
+      </Section>
+      <Button
+        onPress={() => {
+          duplicateFile(file.id);
+          return response(goBack());
+        }}
+      >
+        Duplicate File
+      </Button>
+      <Button
+        onPress={() => {
+          deleteMediaFile(file.id);
+          return response(goBack());
+        }}
+      >
+        Delete File
+      </Button>
+    </ScrollView>
+  );
+}
 
 function DashboardScreen({ dashboard, dashboardKey }: { dashboardKey: string; dashboard?: DashboardState }) {
   const title = dashboardKey === 'live' ? 'Live Dashboard' : 'Ready Dashboard';
@@ -1346,10 +1480,19 @@ function NewLayerButton({
 }) {
   return (
     <BottomSheet
+      trigger={<BottomSheetTriggerButton icon={<LucideIcon icon="PlusCircle" />}>New Layer</BottomSheetTriggerButton>}
+    >
+      {ref('add_scene/' + controlPath.join(':'))}
+    </BottomSheet>
+  );
+
+  return (
+    <BottomSheet
       trigger={
         <YStack>
           <Separator marginVertical="$4" />
-          <BottomSheetTriggerButton icon={<LucideIcon icon="PlusCircle" />}>New Layer</BottomSheetTriggerButton>
+          return (
+          {/* <BottomSheetTriggerButton icon={<LucideIcon icon="PlusCircle" />}>New Layer</BottomSheetTriggerButton> */}
         </YStack>
       }
     >
@@ -1385,6 +1528,13 @@ function NewSequenceItem({
   controlPath: string[];
   onScene: (update: (m: Scene) => Scene) => void;
 }) {
+  return (
+    <BottomSheet
+      trigger={<BottomSheetTriggerButton icon={<LucideIcon icon="PlusCircle" />}>New Layer</BottomSheetTriggerButton>}
+    >
+      {ref('add_scene/' + controlPath.join(':'))}
+    </BottomSheet>
+  );
   return (
     <BottomSheet
       trigger={
@@ -1464,7 +1614,11 @@ function VideoScreen({ scene, onScene, controlPath, onGetMediaIndex, extraContro
   return (
     <ScrollView>
       <YStack marginVertical="$4" marginHorizontal="$4" gap="$4">
-        {index?.files ? (
+        {scene?.track ? (
+          <Button onPress={navigate(`browse_videos/${scene.track}`)} iconAfter={<LucideIcon icon="ChevronRight" />}>
+            {index?.files.find((file) => file.id === scene.track)?.title || scene.track}
+          </Button>
+        ) : index?.files ? (
           <SelectDropdown
             emptyLabel="Select a video track"
             value={scene?.track}
@@ -1473,7 +1627,9 @@ function VideoScreen({ scene, onScene, controlPath, onGetMediaIndex, extraContro
               onScene(() => ({ ...scene, track: key, label: index.files.find((f) => f.id === key)?.title }));
             }}
           />
-        ) : null}
+        ) : (
+          <Spinner />
+        )}
         <Button
           onPress={() => {
             const player = mainVideo.getPlayer(scene.id);

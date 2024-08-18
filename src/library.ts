@@ -2,7 +2,7 @@ import { query } from '@rise-tools/server';
 import { libraryPath } from './paths';
 import { readdir, writeFile, readFile } from 'fs/promises';
 import { join } from 'path';
-import { Scene, sceneSchema } from './state-schema';
+import { dashboardSchema, Scene, sceneSchema, sliderFieldSchema, sliderFieldsSchema } from './state-schema';
 import { mainState } from './state';
 
 export const libraryIndex = query(async () => {
@@ -39,6 +39,10 @@ export function getSceneTitle(scene: Scene) {
 export async function getLibraryItem(name: string) {
   const sceneDataJson = await readFile(join(libraryPath, `${name}.json`), { encoding: 'utf-8' });
   const sceneData = JSON.parse(sceneDataJson);
-  const scene = sceneSchema.parse(sceneData);
-  return scene;
+  const scene = sceneSchema.parse(sceneData.scene);
+  return {
+    scene,
+    dashboard: dashboardSchema.parse(sceneData.dashboard),
+    sliderFields: sliderFieldsSchema.parse(sceneData.sliderFields),
+  };
 }

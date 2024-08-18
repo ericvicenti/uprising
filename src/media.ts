@@ -19,11 +19,12 @@ const mediaFileSchema = z.object({
 
 export type MediaFile = z.infer<typeof mediaFileSchema>;
 
-export type MediaIndex = z.infer<typeof mediaIndexSchema>;
-
 const mediaIndexSchema = z.object({
   files: z.array(mediaFileSchema),
+  deletedFiles: z.array(mediaFileSchema).optional(),
 });
+
+export type MediaIndex = z.infer<typeof mediaIndexSchema>;
 
 export const mediaIndex = query(async () => {
   const mediaIndex = join(mediaPath, 'index.json');
@@ -42,7 +43,42 @@ export const mediaIndex = query(async () => {
   }
 });
 
-type ImportState = {
+async function updateMediaIndex(updater: (index: MediaIndex) => MediaIndex) {
+  const mediaIndexPath = join(mediaPath, 'index.json');
+  const index = await mediaIndex.load();
+  const newIndex = updater(index);
+  await writeFile(mediaIndexPath, JSON.stringify(newIndex, null, 2));
+  mediaIndex.invalidate();
+}
+
+export async function renameMediaFile(id: string, newTitle: string) {
+  console.log('rename', id, newTitle);
+  await updateMediaIndex((index) => {
+    return {
+      ...index,
+      files: index.files.map((file) => {
+        if (file.id === id) {
+          return { ...file, title: newTitle };
+        }
+        return file;
+      }),
+    };
+  });
+}
+
+export async function deleteMediaFile(id: string) {
+  await updateMediaIndex((index) => {
+    const file = index.files.find((file) => file.id === id);
+    if (!file) return index;
+    return {
+      ...index,
+      files: index.files.filter((file) => file.id !== id),
+      deletedFiles: [...(index.deletedFiles || []), file],
+    };
+  });
+}
+
+export type ImportState = {
   importing: { url: string; id: string; state: string }[];
 };
 
@@ -73,24 +109,25 @@ export async function importMedia(url: string) {
   };
   const importResult = await importMediaFile(`${importingPath}/${mediaFile}`, importingPath, setProgressState);
   setProgressState('Finalizing');
-  const mediaIndexPath = join(mediaPath, 'index.json');
-  const index = mediaIndex.get();
   await rename(`${importingPath}/${importResult.egFramesFile}`, `${mediaPath}/${id}.eg.data`);
-  const newIndex: MediaIndex = {
-    files: [
-      ...(index?.files || []),
-      {
-        id,
-        sourceUrl: url,
-        title: info.fulltitle || info.title || url,
-        egFramesFile: `${id}.eg.data`,
-        importerMetadata: importResult,
-        downloadMetadata: info,
-      },
-    ],
-  };
-  await writeFile(mediaIndexPath, JSON.stringify(newIndex, null, 2));
-  mediaIndex.invalidate();
+
+  updateMediaIndex((index) => {
+    return {
+      ...index,
+      files: [
+        ...(index?.files || []),
+        {
+          id,
+          sourceUrl: url,
+          title: info.fulltitle || info.title || url,
+          egFramesFile: `${id}.eg.data`,
+          importerMetadata: importResult,
+          downloadMetadata: info,
+        },
+      ],
+    };
+  });
+
   setImportState((state) => {
     return { importing: state?.importing.filter((importItem) => importItem.id !== id) || [] };
   });
