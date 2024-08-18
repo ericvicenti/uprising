@@ -4,3 +4,4 @@ export const statePath = process.env.DATA_PATH || join(__dirname, './../data');
 export const mainStatePath = join(statePath, 'main.json');
 export const libraryPath = join(statePath, 'library');
 export const mediaPath = join(statePath, 'media');
+export const importingPath = join(statePath, 'importing');

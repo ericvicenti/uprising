@@ -2,13 +2,12 @@ import fs from 'fs';
 import { createReadStream, read, stat } from 'fs-extra';
 import { join } from 'path';
 import { promisify } from 'util';
-import zlib from 'zlib';
 import { eg as egInfo } from './eg';
 
 import { EGInfo } from './eg';
 import { Frame } from './eg-sacn';
-import { DBFile, DBState, readDb } from './eg-video';
 import { mediaPath } from './paths';
+import { MediaFile, mediaIndex } from './media';
 
 export type VideoPlaybackInstance = {
   readFrame: () => Frame | null;
@@ -18,7 +17,7 @@ export type VideoPlaybackInstance = {
   frameCount: number;
   isForward: boolean;
   playingFrame: number | null;
-  info: DBFile;
+  info: MediaFile;
 };
 
 export type VideoPlayer = {
@@ -30,7 +29,7 @@ export type VideoPlayer = {
   setParams: (params: PlaybackParams) => void;
   getFrameCount: () => number | null;
   getPlayingFrame: () => number | null;
-  getInfo: () => DBFile | null;
+  getInfo: () => MediaFile | null;
 };
 
 export type PlaybackParams = {
@@ -45,37 +44,23 @@ export function egVideo(
   eg: EGInfo,
   mediaPath: string,
   {
-    onMediaUpdate,
     onPlayerUpdate,
     onFrameInfo,
   }: {
-    onMediaUpdate: (mediaDb: DBState) => void;
     onPlayerUpdate: (player: VideoPlayer) => void;
     onFrameInfo?: (playerId: string, player: VideoPlaybackInstance) => void;
   }
 ) {
   const { frameSize } = eg;
 
-  let mediaDb: null | DBState = null;
-
-  async function updateDb() {
-    mediaDb = await readDb(mediaPath);
-    onMediaUpdate(mediaDb);
-  }
-
-  updateDb();
-
-  setInterval(() => {
-    updateDb();
-  }, 5000);
-
   async function loadVideo(
     playerId: string,
-    fileSha256: string,
+    mediaId: string,
     params: PlaybackParams = {}
   ): Promise<VideoPlaybackInstance> {
-    const dbState = await readDb(mediaPath);
-    const file = dbState.files.find((file) => file.fileSha256 === fileSha256);
+    const index = await mediaIndex.load();
+
+    const file = index?.files.find((file) => file.id === mediaId);
     // console.log('will load video', file)
 
     let playbackParams: PlaybackParams = params;
@@ -88,7 +73,7 @@ export function egVideo(
     let playCount = 0;
     const framesFile = file?.egFramesFile;
     if (!framesFile) {
-      throw new Error('No frames file found for ' + fileSha256);
+      throw new Error('No frames file found for ' + mediaId);
     }
     const framesFilePath = join(mediaPath, framesFile);
     const fileInfo = await stat(framesFilePath);
@@ -309,7 +294,7 @@ export function egVideo(
       }
       return null;
     }
-    function getInfo(): DBFile | null {
+    function getInfo(): MediaFile | null {
       if (videoInstance) {
         return videoInstance.info;
       }
@@ -345,40 +330,12 @@ export function egVideo(
 
   return {
     loadVideo,
-    updateDb,
-    getDb() {
-      return mediaDb;
-    },
-    getTrackTitle(trackId: string) {
-      const track = mediaDb?.files.find((file) => file.fileSha256 === trackId);
-      return track?.title || trackId;
-    },
     getPlayer,
     incrementTime,
   };
 }
 
 export const mainVideo = egVideo(egInfo, mediaPath, {
-  // const video = egVideo(egInfo, process.env.EG_MEDIA_PATH || 'eg-media-2', {
-  onPlayerUpdate: () => {
-    // updateUI();
-  },
-  onMediaUpdate: (media) => {
-    // wsServer.update("videoList", [
-    //   { key: "none", label: "None" },
-    //   ...media.files.map((m) => ({ key: m.fileSha256, label: m.title })),
-    // ]);
-  },
-  onFrameInfo: (playerId, playback) => {
-    // if (
-    //   playback &&
-    //   playback.playingFrame != null &&
-    //   playback.playingFrame % 10 === 0
-    // ) {
-    //   wsServer.update(`videoFrameInfo/${playerId}`, {
-    //     index: playback.playingFrame,
-    //     isForward: playback.isForward,
-    //   });
-    // }
-  },
+  onPlayerUpdate: () => {},
+  onFrameInfo: (playerId, playback) => {},
 });

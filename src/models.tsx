@@ -33,7 +33,7 @@ import { hslToHex } from './color';
 import { getSequenceActiveItem } from './eg-main';
 import { mainVideo } from './eg-video-playback';
 import { getLibraryItem, libraryIndex, writeLibraryItem } from './library';
-import { MediaIndex, mediaIndex } from './media';
+import { importMedia, importState, MediaIndex, mediaIndex } from './media';
 import {
   addBounceToDashboard,
   addSliderToDashboard,
@@ -131,7 +131,7 @@ export const models = {
             <Button icon={<LucideIcon icon="Library" />} onPress={navigate('browse_videos')}>
               Media
             </Button>
-            <Button icon={<LucideIcon icon="Library" />} onPress={navigate('browse_media')}>
+            <Button icon={<LucideIcon icon="Library" />} onPress={navigate('browse_library')}>
               Scenes
             </Button>
           </Section>
@@ -150,20 +150,46 @@ export const models = {
     (get) => {
       const media = get(mediaIndex);
       return (
-        <YStack gap="$4" padding="$4">
-          {media?.files?.map((file) => <Button onPress={() => {}}>{file.title}</Button>)}
-        </YStack>
+        <ScrollView>
+          <YStack gap="$4" padding="$4">
+            {media?.files?.map((file) => <Button onPress={() => {}}>{file.title}</Button>)}
+          </YStack>
+          <Section title="Import">
+            <RiseForm
+              onSubmit={(values) => {
+                importMedia(values.url)
+                  .then(() => {
+                    // console.log('done.');
+                  })
+                  .catch((e) => {
+                    console.error(e);
+                  });
+              }}
+            >
+              <InputField id="url" label="URL" />
+              <SubmitButton>Start Import</SubmitButton>
+            </RiseForm>
+            {get(importState)?.importing?.map((importItem) => (
+              <YStack marginVertical="$3">
+                <Text>{importItem.url}</Text>
+                <Text color="$color8">{importItem.state}</Text>
+              </YStack>
+            ))}
+          </Section>
+        </ScrollView>
       );
     },
     { compare: isEqual }
   ),
-  browse_media: view(
+  browse_library: view(
     (get) => {
       const lib = get(libraryIndex);
       return (
-        <YStack gap="$4" padding="$4">
-          {lib?.map((file) => <Button onPress={() => {}}>{file}</Button>)}
-        </YStack>
+        <ScrollView>
+          <YStack gap="$4" padding="$4">
+            {lib?.map((file) => <Button onPress={() => {}}>{file}</Button>)}
+          </YStack>
+        </ScrollView>
       );
     },
     { compare: isEqual }
@@ -179,11 +205,11 @@ export const models = {
             <Section title="Media">
               {media?.files?.map((file) => (
                 <BottomSheetCloseButton
-                  key={`media-${file.fileSha256}`}
+                  key={`media-${file.id}`}
                   onPress={() => {
                     updateScene(scenePath, () => ({
                       ...createBlankScene('video'),
-                      track: file.fileSha256,
+                      track: file.id,
                       label: file.title,
                     }));
                   }}
@@ -1442,9 +1468,9 @@ function VideoScreen({ scene, onScene, controlPath, onGetMediaIndex, extraContro
           <SelectDropdown
             emptyLabel="Select a video track"
             value={scene?.track}
-            options={index?.files.map((file) => ({ key: file.fileSha256, label: file.title }))}
+            options={index?.files.map((file) => ({ key: file.id, label: file.title }))}
             onSelect={(key) => {
-              onScene(() => ({ ...scene, track: key, label: index.files.find((f) => f.fileSha256 === key)?.title }));
+              onScene(() => ({ ...scene, track: key, label: index.files.find((f) => f.id === key)?.title }));
             }}
           />
         ) : null}
