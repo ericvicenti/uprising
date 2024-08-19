@@ -1,13 +1,20 @@
-import { getMidiControls } from './eg-midi-fields';
-import { mainState, startAutoTransition } from './state';
+import { dashboards, startAutoTransition } from './state';
 import { subscribeMidiEvents } from './eg-midi-server';
 
-export function initMidiController() {
-  let midiDashboard = getMidiControls(mainState.get());
+const readyDash = dashboards.get('ready')!;
+const liveDash = dashboards.get('live')!;
 
-  mainState.subscribe((state) => {
+export function initMidiController() {
+  let readyDashboard = readyDash.get();
+  let liveDashboard = liveDash.get();
+
+  readyDash.subscribe((state) => {
     if (!state) return;
-    midiDashboard = getMidiControls(state);
+    readyDashboard = state;
+  });
+  liveDash.subscribe((state) => {
+    if (!state) return;
+    liveDashboard = state;
   });
 
   const midiLiveButtons = [23, 24, 25, 26];
@@ -44,7 +51,7 @@ export function initMidiController() {
     // }
     const liveButton = midiLiveButtons.indexOf(channel);
     if (liveButton !== -1) {
-      const midiControl = midiDashboard.live.buttons[liveButton];
+      const midiControl = liveDashboard?.buttons[liveButton];
       if (!midiControl) return;
       midiControl.onPress();
       return;
@@ -52,14 +59,14 @@ export function initMidiController() {
 
     const readyButton = midiReadyButtons.indexOf(channel);
     if (readyButton !== -1) {
-      const midiControl = midiDashboard.ready.buttons[readyButton];
+      const midiControl = readyDashboard?.buttons[readyButton];
       if (!midiControl) return;
       midiControl.onPress();
       return;
     }
     const liveSlider = midiLiveSliders.indexOf(channel);
     if (liveSlider !== -1) {
-      const midiControl = midiDashboard.live.sliders[liveSlider];
+      const midiControl = liveDashboard?.sliders[liveSlider];
       if (!midiControl) return;
       midiControl.onValue(value);
 
@@ -67,7 +74,7 @@ export function initMidiController() {
     }
     const readySlider = midiReadySliders.indexOf(channel);
     if (readySlider !== -1) {
-      const midiControl = midiDashboard.ready.sliders[readySlider];
+      const midiControl = readyDashboard?.sliders[readySlider];
       if (!midiControl) return;
       midiControl.onValue(value);
       return;

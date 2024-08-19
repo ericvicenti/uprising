@@ -3,7 +3,8 @@ import { randomUUID } from 'crypto';
 import { existsSync } from 'fs';
 import { readFile, writeFile } from 'fs/promises';
 import { mainStatePath } from './paths';
-import { Dashboard, defaultMainState, Effect, MainState, MainStateSchema, Scene } from './state-schema';
+import { Dashboard, defaultMainState, Effect, MainState, MainStateSchema, Scene, SliderFields } from './state-schema';
+import { get } from 'lodash';
 
 const [_mainState, setMainState] = state<MainState | null>(null);
 
@@ -114,22 +115,24 @@ function drillSceneState(scene: Scene, path: string[]) {
     if (scene.type !== 'layers') return null;
     const layerKey = path[0].slice(6);
     const layer = scene.layers.find((layer) => layer.key === layerKey);
-    return layer?.scene || null;
+    if (!layer) return null;
+    return drillSceneState(layer.scene, path.slice(1));
   }
   if (path[0].startsWith('item_')) {
     if (scene.type !== 'sequence') return null;
     const layerKey = path[0].slice(5);
     const layer = scene.sequence.find((item) => item.key === layerKey);
-    return layer?.scene || null;
+    if (!layer) return null;
+    return drillSceneState(layer.scene, path.slice(1));
   }
   return null;
 }
 
 function drillMainSceneState(state: MainState | null, path: string[]): Scene | null {
   if (!state) return null;
-  const [mediaId, ...rest] = path;
-  if (mediaId === 'live') return drillSceneState(state.liveScene, rest);
-  if (mediaId === 'ready') return drillSceneState(state.readyScene, rest);
+  const [rootSceneId, ...rest] = path;
+  if (rootSceneId === 'live') return drillSceneState(state.liveScene, rest);
+  if (rootSceneId === 'ready') return drillSceneState(state.readyScene, rest);
   return null;
 }
 
@@ -162,8 +165,10 @@ export const dashboards = lookup((key) => {
     (get) => {
       const state = get(mainState);
       if (!state) return undefined;
-      if (key === 'live') return getDashboardState(state.liveScene, state.liveDashboard, 'live');
-      if (key === 'ready') return getDashboardState(state.readyScene, state.readyDashboard, 'ready');
+      if (key === 'live')
+        return getDashboardState(state.liveScene, state.liveSliderFields, state.liveDashboard, 'live');
+      if (key === 'ready')
+        return getDashboardState(state.readyScene, state.readySliderFields, state.readyDashboard, 'ready');
       return undefined;
     },
     { compare: true }
@@ -182,44 +187,226 @@ export function startAutoTransition() {
 
 export type DashboardState = {
   items: DashboardStateItem[];
+  buttons: DashboardButtonItem[];
+  sliders: DashboardSliderItem[];
 };
-export type DashboardStateItem = {
-  key: string;
+export type DashboardButtonItem = {
   type: 'button';
-  field: string;
-  behvaior: 'bounce' | 'goNext';
-  locationLabel: string;
-  behaviorLabel: string;
-  dashboardId: 'live' | 'ready';
+  key: string;
+  hardwareLabel: string;
+  label: string;
+  onPress: () => void;
 };
+export type DashboardSliderItem = {
+  type: 'slider';
+  key: string;
+  hardwareLabel: string;
+  label: string;
+  value: number;
+  onValue: (value: number) => void;
+  min?: number;
+  max?: number;
+  step?: number;
+  smoothing: number | undefined;
+};
+export type DashboardStateItem = DashboardButtonItem | DashboardSliderItem;
 
-function getDashboardState(scene: Scene, dashboard: Dashboard, dashboardId: 'live' | 'ready'): DashboardState {
+function getDashboardState(
+  scene: Scene,
+  sliderFields: SliderFields,
+  dashboard: Dashboard,
+  dashboardId: 'live' | 'ready'
+): DashboardState {
   const items: DashboardStateItem[] = [];
+  const buttons: DashboardButtonItem[] = [];
+  const sliders: DashboardSliderItem[] = [];
+  function addButton(button: DashboardButtonItem) {
+    buttons.push(button);
+    items.push(button);
+  }
+  function addSlider(slider: DashboardSliderItem) {
+    sliders.push(slider);
+    items.push(slider);
+  }
+  function getHardwareButtonLabel() {
+    if (buttons.length < 4) return `${dashboardId} button ${buttons.length + 1}`;
+    return '';
+  }
+  function getHardwareSliderLabel() {
+    if (sliders.length < 4) return `${dashboardId} slider ${sliders.length + 1}`;
+    if (sliders.length < 8) return `${dashboardId} knob ${sliders.length + 1}`;
+    return '';
+  }
   dashboard.forEach((item) => {
     if (item.behavior === 'bounce') {
-      let locationLabel = '';
-      let walkScene = scene;
-      item.field.split(':').forEach((fieldKey) => {});
-      items.push({
-        key: item.key,
-        field: item.field,
-        dashboardId,
-        behvaior: 'bounce',
+      addButton({
         type: 'button',
-        behaviorLabel: 'Bounce' + item.field,
-        locationLabel: 'Live',
+        key: item.key,
+        hardwareLabel: getHardwareButtonLabel(),
+        label: 'Bounce ' + item.field,
+        onPress: () => {
+          bounceField(dashboardId, item.field);
+        },
+      });
+    } else if (item.behavior === 'slider') {
+      const sliderField = sliderFields[item.field];
+      const fieldPath = item.field.split(':');
+      const baseSlider = {
+        type: 'slider',
+        key: item.key,
+        hardwareLabel: getHardwareSliderLabel(),
+        label: 'Slider ' + item.field,
+        smoothing: sliderField?.smoothing,
+      } as const;
+      let sceneContext: Scene[] = [scene];
+      const afterScenePathIndex = fieldPath.findIndex((fieldTerm, termIndex) => {
+        if (fieldTerm.startsWith('layer_')) {
+          const layerKey = fieldTerm.slice(6);
+          const lastScene = sceneContext.at(-1)!;
+          if (lastScene.type !== 'layers') return;
+          const layer = lastScene.layers.find((layer) => layer.key === layerKey);
+          sceneContext.push(layer!.scene);
+          return false;
+        } else if (fieldTerm.startsWith('item_')) {
+          const itemKey = fieldTerm.slice(5);
+          const lastScene = sceneContext.at(-1)!;
+          if (lastScene.type !== 'sequence') return;
+          const item = lastScene.sequence.find((item) => item.key === itemKey);
+          sceneContext.push(item!.scene);
+          return false;
+        } else {
+          return true;
+        }
+      });
+      const scenePath = fieldPath.slice(0, afterScenePathIndex);
+      function updateSliderScene(updater: (scene: Scene) => Scene) {
+        updateScene([dashboardId, ...scenePath], updater);
+      }
+      const nextTerm = fieldPath[afterScenePathIndex];
+      const deepestScene = sceneContext.at(-1);
+      if (nextTerm === 'blendAmount') {
+        const layersScene = sceneContext.at(-2);
+        const layerId = scenePath.at(-1)?.slice(6);
+        if (layersScene?.type !== 'layers') return;
+        const layer = layersScene.layers.find((layer) => layer.key === layerId);
+        if (!layer) return;
+        addSlider({
+          ...baseSlider,
+          value: layer.blendAmount,
+          onValue: (v) => {
+            updateScene([dashboardId, ...scenePath.slice(0, -1)], (scene) => {
+              if (scene.type !== 'layers') return scene;
+              return {
+                ...scene,
+                layers: scene.layers.map((layer) => {
+                  if (layer.key !== layerId) return layer;
+                  return { ...layer, blendAmount: v };
+                }),
+              };
+            });
+          },
+        });
+      } else if (nextTerm === 'effects' && deepestScene!.type === 'video') {
+        const effectKey = fieldPath[afterScenePathIndex + 1];
+        const effect = deepestScene!.effects?.find((effect) => effect.key === effectKey);
+        const effectField = fieldPath[afterScenePathIndex + 2];
+        function updateEffect(updater: (effect: Effect) => Effect) {
+          updateSliderScene((scene) => {
+            if (scene.type !== 'video') return scene;
+            return {
+              ...scene,
+              effects: scene.effects?.map((effect) => {
+                if (effect.key !== effectKey) return effect;
+                return updater(effect);
+              }),
+            };
+          });
+        }
+        if (!effect) return;
+        if (effect.type === 'hueShift') {
+          addSlider({
+            ...baseSlider,
+            value: effect.value,
+            onValue: (v) => {
+              updateEffect((effect) => ({ ...effect, value: v }));
+            },
+          });
+        } else if (effect.type === 'desaturate' && effectField === 'value') {
+          addSlider({
+            ...baseSlider,
+            value: effect.value,
+            onValue: (v) => {
+              updateEffect((effect) => ({ ...effect, value: v }));
+            },
+          });
+        } else if (effect.type === 'colorize' && effectField === 'amount') {
+          addSlider({
+            ...baseSlider,
+            value: effect.amount,
+            onValue: (v) => {
+              updateEffect((effect) => ({ ...effect, amount: v }));
+            },
+          });
+        } else if (effect.type === 'colorize' && effectField === 'saturation') {
+          addSlider({
+            ...baseSlider,
+            value: effect.saturation,
+            onValue: (v) => {
+              updateEffect((effect) => ({ ...effect, saturation: v }));
+            },
+          });
+        } else if (effect.type === 'colorize' && effectField === 'hue') {
+          addSlider({
+            ...baseSlider,
+            value: effect.hue,
+            onValue: (v) => {
+              updateEffect((effect) => ({ ...effect, hue: v }));
+            },
+            min: -180,
+            max: 180,
+            step: 1,
+          });
+        } else if (effect.type === 'darken' && effectField === 'value') {
+          addSlider({
+            ...baseSlider,
+            value: effect.value,
+            onValue: (v) => {
+              updateEffect((effect) => ({ ...effect, value: v }));
+            },
+          });
+        } else if (effect.type === 'brighten' && effectField === 'value') {
+          addSlider({
+            ...baseSlider,
+            value: effect.value,
+            onValue: (v) => {
+              updateEffect((effect) => ({ ...effect, value: v }));
+            },
+          });
+        } else if (effect.type === 'rotate' && effectField === 'value') {
+          addSlider({
+            ...baseSlider,
+            value: effect.value,
+            onValue: (v) => {
+              updateEffect((effect) => ({ ...effect, value: v }));
+            },
+          });
+        }
+      }
+    } else if (item.behavior === 'goNext') {
+      addButton({
+        type: 'button',
+        key: item.key,
+        hardwareLabel: getHardwareButtonLabel(),
+        label: 'Go Next',
+        onPress: () => {},
       });
     }
   });
   return {
     items,
+    buttons,
+    sliders,
   };
-}
-
-export function dashboardButtonPress(item: DashboardStateItem) {
-  if (item.behvaior === 'bounce') {
-    bounceField(item.dashboardId, item.field);
-  }
 }
 
 export function bounceField(rootSceneId: 'live' | 'ready', fieldPath: string) {
@@ -299,7 +486,6 @@ export function createBlankEffect(type: Effect['type']): Effect {
 }
 
 export async function addBounceToDashboard(scenePath: string[], fieldPath: string[]) {
-  console.log('addBounceToDashboard', scenePath, fieldPath);
   mainStateUpdate((state) => {
     const [rootSceneKey, ...innerScenePath] = scenePath;
     const dashboardKey = rootSceneKey === 'live' ? 'liveDashboard' : 'readyDashboard';

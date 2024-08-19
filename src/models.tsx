@@ -86,6 +86,7 @@ import {
   TransitionState,
   VideoScene,
 } from './state-schema';
+import { DefaultSmoothing } from './constants';
 // import { isEqual } from 'lodash';
 
 function isEqual(a: any, b: any) {
@@ -561,18 +562,44 @@ function DashboardScreen({ dashboard, dashboardKey }: { dashboardKey: string; da
   );
 }
 
+function DashboardItemHeader({ item }: { item: DashboardStateItem }) {
+  return (
+    <XStack justifyContent="space-between">
+      <Text>{item.label}</Text>
+      <Text color="$color9">{item.hardwareLabel}</Text>
+    </XStack>
+  );
+}
+
 function DashboardItem({ item }: { item: DashboardStateItem }) {
   if (item.type === 'button') {
     return (
       <YStack>
-        <Text>{item.locationLabel}</Text>
+        <DashboardItemHeader item={item} />
         <Button
           onPress={() => {
-            dashboardButtonPress(item);
+            item.onPress();
           }}
         >
-          {item.behaviorLabel}
+          {item.label}
         </Button>
+      </YStack>
+    );
+  } else if (item.type === 'slider') {
+    return (
+      <YStack>
+        <DashboardItemHeader item={item} />
+        <SmoothSlider
+          value={item.value}
+          onValueChange={(value) => {
+            item.onValue(value);
+          }}
+          min={item.min ?? 0}
+          max={item.max ?? 1}
+          step={item.step ?? 0.01}
+          smoothing={item.smoothing ?? DefaultSmoothing}
+          size={50}
+        />
       </YStack>
     );
   }
