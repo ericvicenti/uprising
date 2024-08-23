@@ -195,22 +195,33 @@ export type DashboardState = {
 type BaseDashboardItem = {
   key: string;
   label: string;
+  dashboardId: 'live' | 'ready';
+  scenePath: string[];
   field: string;
   hardwareLabel: string;
   breadcrumbs: { controlPath: string[]; label: string }[];
 };
-export type DashboardButtonItem = BaseDashboardItem & {
-  type: 'button';
-  onPress: () => void;
-};
-export type DashboardSliderItem = BaseDashboardItem & {
-  type: 'slider';
+export type DashboardSliderState = {
   value: number;
   onValue: (value: number) => void;
   min?: number;
   max?: number;
   step?: number;
   smoothing: number | undefined;
+  bounceAmount: number | undefined;
+  bounceDuration: number | undefined;
+  fieldPath: string[];
+  label: string;
+};
+export type DashboardButtonItem = BaseDashboardItem & {
+  type: 'button';
+  slider?: DashboardSliderState;
+  buttonLabel: string;
+  onPress: () => void;
+};
+export type DashboardSliderItem = BaseDashboardItem & {
+  type: 'slider';
+  slider: DashboardSliderState;
 };
 export type DashboardStateItem = DashboardButtonItem | DashboardSliderItem;
 
@@ -226,11 +237,14 @@ function getSceneTitle(scene: Scene, mediaIndex: MediaIndex | undefined) {
   if (scene.type === 'sequence') return 'Sequence';
 }
 
-function labelField(field: string) {
-  const parts = field.split(':');
-  const lastPart = parts.at(-1);
+function capitalize(label: string) {
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+function labelField(fieldPath: string[]) {
+  const lastPart = fieldPath.at(-1);
   if (!lastPart) return '?';
-  return lastPart.charAt(0).toUpperCase() + lastPart.slice(1);
+  return capitalize(lastPart);
 }
 
 function getDashboardState(
@@ -263,6 +277,28 @@ function getDashboardState(
   dashboard.forEach((item) => {
     let breadcrumbWalkPath: string[] = [];
     let breadcrumbWalkScene: null | Scene = scene;
+    let sceneContext: Scene[] = [scene];
+    const fieldPath = item.field.split(':');
+    const afterScenePathIndex = fieldPath.findIndex((fieldTerm, termIndex) => {
+      if (fieldTerm.startsWith('layer_')) {
+        const layerKey = fieldTerm.slice(6);
+        const lastScene = sceneContext.at(-1)!;
+        if (lastScene.type !== 'layers') return;
+        const layer = lastScene.layers.find((layer) => layer.key === layerKey);
+        sceneContext.push(layer!.scene);
+        return false;
+      } else if (fieldTerm.startsWith('item_')) {
+        const itemKey = fieldTerm.slice(5);
+        const lastScene = sceneContext.at(-1)!;
+        if (lastScene.type !== 'sequence') return;
+        const item = lastScene.sequence.find((item) => item.key === itemKey);
+        sceneContext.push(item!.scene);
+        return false;
+      } else {
+        return true;
+      }
+    });
+    const scenePath = fieldPath.slice(0, afterScenePathIndex);
     const breadcrumbField = item.field
       .split(':')
       .map((term) => {
@@ -302,6 +338,19 @@ function getDashboardState(
             label = sceneTitle;
           }
         }
+        if (term.startsWith('effect_')) {
+          const effectKey = term.slice(7);
+          if (breadcrumbWalkScene.type !== 'video') {
+            breadcrumbWalkScene = null;
+            return null;
+          }
+          const effect = breadcrumbWalkScene.effects?.find((effect) => effect.key === effectKey);
+          if (!effect) {
+            breadcrumbWalkScene = null;
+            return null;
+          }
+          label = capitalize(effect.type);
+        }
         if (term === 'effects') {
           label = 'Effects';
         }
@@ -320,170 +369,55 @@ function getDashboardState(
       },
       ...breadcrumbField,
     ];
+    const slider =
+      item.behavior === 'slider' || item.behavior === 'bounce'
+        ? getSliderState(
+            dashboardId,
+            sliderFields,
+            fieldPath.slice(afterScenePathIndex),
+            scenePath,
+            sceneContext.at(-1)!,
+            sceneContext.at(-2)
+          )
+        : undefined;
+    const baseDashboardItem = {
+      key: item.key,
+      field: item.field,
+      scenePath,
+      breadcrumbs,
+      dashboardId,
+      label: labelField(fieldPath),
+    };
     if (item.behavior === 'bounce') {
-      addButton({
-        type: 'button',
-        key: item.key,
-        field: item.field,
-        breadcrumbs,
-        hardwareLabel: getHardwareButtonLabel(),
-        label: `${labelField(item.field)} Bounce`,
-        onPress: () => {
-          bounceField(dashboardId, item.field);
-        },
-      });
-    } else if (item.behavior === 'slider') {
       const sliderField = sliderFields[item.field];
-      const fieldPath = item.field.split(':');
-      const baseSlider = {
-        type: 'slider',
-        key: item.key,
-        field: item.field,
-        breadcrumbs,
-        hardwareLabel: getHardwareSliderLabel(),
-        label: labelField(item.field),
-        smoothing: sliderField?.smoothing,
-      } as const;
-      let sceneContext: Scene[] = [scene];
-      const afterScenePathIndex = fieldPath.findIndex((fieldTerm, termIndex) => {
-        if (fieldTerm.startsWith('layer_')) {
-          const layerKey = fieldTerm.slice(6);
-          const lastScene = sceneContext.at(-1)!;
-          if (lastScene.type !== 'layers') return;
-          const layer = lastScene.layers.find((layer) => layer.key === layerKey);
-          sceneContext.push(layer!.scene);
-          return false;
-        } else if (fieldTerm.startsWith('item_')) {
-          const itemKey = fieldTerm.slice(5);
-          const lastScene = sceneContext.at(-1)!;
-          if (lastScene.type !== 'sequence') return;
-          const item = lastScene.sequence.find((item) => item.key === itemKey);
-          sceneContext.push(item!.scene);
-          return false;
-        } else {
-          return true;
-        }
-      });
-      const scenePath = fieldPath.slice(0, afterScenePathIndex);
-      function updateSliderScene(updater: (scene: Scene) => Scene) {
-        updateScene([dashboardId, ...scenePath], updater);
-      }
-      const nextTerm = fieldPath[afterScenePathIndex];
-      const deepestScene = sceneContext.at(-1);
-      if (nextTerm === 'blendAmount') {
-        const layersScene = sceneContext.at(-2);
-        const layerId = scenePath.at(-1)?.slice(6);
-        if (layersScene?.type !== 'layers') return;
-        const layer = layersScene.layers.find((layer) => layer.key === layerId);
-        if (!layer) return;
-        addSlider({
-          ...baseSlider,
-          value: layer.blendAmount,
-          onValue: (v) => {
-            updateScene([dashboardId, ...scenePath.slice(0, -1)], (scene) => {
-              if (scene.type !== 'layers') return scene;
-              return {
-                ...scene,
-                layers: scene.layers.map((layer) => {
-                  if (layer.key !== layerId) return layer;
-                  return { ...layer, blendAmount: v };
-                }),
-              };
-            });
+      if (sliderField) {
+        addButton({
+          type: 'button',
+          ...baseDashboardItem,
+          hardwareLabel: getHardwareButtonLabel(),
+          label: `Bounce`,
+          buttonLabel: `Bounce ${labelField(fieldPath)} ${sliderField.bounceAmount} (${Math.round((sliderField.bounceDuration || 1000) / 100) / 10} sec)`,
+          onPress: () => {
+            bounceField(dashboardId, item.field);
           },
+          slider,
         });
-      } else if (nextTerm === 'effects' && deepestScene!.type === 'video') {
-        const effectKey = fieldPath[afterScenePathIndex + 1];
-        const effect = deepestScene!.effects?.find((effect) => effect.key === effectKey);
-        const effectField = fieldPath[afterScenePathIndex + 2];
-        function updateEffect(updater: (effect: Effect) => Effect) {
-          updateSliderScene((scene) => {
-            if (scene.type !== 'video') return scene;
-            return {
-              ...scene,
-              effects: scene.effects?.map((effect) => {
-                if (effect.key !== effectKey) return effect;
-                return updater(effect);
-              }),
-            };
-          });
-        }
-        if (!effect) return;
-        if (effect.type === 'hueShift') {
-          addSlider({
-            ...baseSlider,
-            value: effect.value,
-            onValue: (v) => {
-              updateEffect((effect) => ({ ...effect, value: v }));
-            },
-          });
-        } else if (effect.type === 'desaturate' && effectField === 'value') {
-          addSlider({
-            ...baseSlider,
-            value: effect.value,
-            onValue: (v) => {
-              updateEffect((effect) => ({ ...effect, value: v }));
-            },
-          });
-        } else if (effect.type === 'colorize' && effectField === 'amount') {
-          addSlider({
-            ...baseSlider,
-            value: effect.amount,
-            onValue: (v) => {
-              updateEffect((effect) => ({ ...effect, amount: v }));
-            },
-          });
-        } else if (effect.type === 'colorize' && effectField === 'saturation') {
-          addSlider({
-            ...baseSlider,
-            value: effect.saturation,
-            onValue: (v) => {
-              updateEffect((effect) => ({ ...effect, saturation: v }));
-            },
-          });
-        } else if (effect.type === 'colorize' && effectField === 'hue') {
-          addSlider({
-            ...baseSlider,
-            value: effect.hue,
-            onValue: (v) => {
-              updateEffect((effect) => ({ ...effect, hue: v }));
-            },
-            min: -180,
-            max: 180,
-            step: 1,
-          });
-        } else if (effect.type === 'darken' && effectField === 'value') {
-          addSlider({
-            ...baseSlider,
-            value: effect.value,
-            onValue: (v) => {
-              updateEffect((effect) => ({ ...effect, value: v }));
-            },
-          });
-        } else if (effect.type === 'brighten' && effectField === 'value') {
-          addSlider({
-            ...baseSlider,
-            value: effect.value,
-            onValue: (v) => {
-              updateEffect((effect) => ({ ...effect, value: v }));
-            },
-          });
-        } else if (effect.type === 'rotate' && effectField === 'value') {
-          addSlider({
-            ...baseSlider,
-            value: effect.value,
-            onValue: (v) => {
-              updateEffect((effect) => ({ ...effect, value: v }));
-            },
-          });
-        }
       }
+    } else if (item.behavior === 'slider' && slider) {
+      addSlider({
+        type: 'slider',
+        ...baseDashboardItem,
+        hardwareLabel: getHardwareSliderLabel(),
+        slider,
+        label: slider.label,
+      });
     } else if (item.behavior === 'goNext') {
       addButton({
         type: 'button',
-        key: item.key,
+        ...baseDashboardItem,
         hardwareLabel: getHardwareButtonLabel(),
         label: 'Go Next',
+        buttonLabel: 'Go',
         onPress: () => {},
       });
     }
@@ -493,6 +427,149 @@ function getDashboardState(
     buttons,
     sliders,
   };
+}
+
+function getSliderState(
+  dashboardId: 'live' | 'ready',
+  sliderFields: SliderFields,
+  fieldPath: string[],
+  scenePath: string[],
+  scene: Scene,
+  parentScene: Scene | undefined
+): DashboardSliderState | undefined {
+  console.log('getSliderState', {
+    dashboardId,
+    sliderFields,
+    fieldPath,
+    scenePath,
+    scene,
+    parentScene,
+  });
+
+  const field = [...scenePath, ...fieldPath].join(':');
+  const sliderField = sliderFields[field];
+  const baseSlider = {
+    label: labelField(fieldPath),
+    smoothing: sliderField?.smoothing,
+    bounceAmount: sliderField?.bounceAmount,
+    bounceDuration: sliderField?.bounceDuration,
+    fieldPath,
+    min: 0,
+    max: 1,
+    step: 0.01,
+  } as const;
+
+  function updateSliderScene(updater: (scene: Scene) => Scene) {
+    updateScene([dashboardId, ...scenePath], updater);
+  }
+  if (fieldPath.length === 1 && fieldPath[0] === 'blendAmount') {
+    const layerId = scenePath.at(-1)?.slice(6);
+    if (parentScene!?.type !== 'layers') return;
+    const layer = parentScene.layers.find((layer) => layer.key === layerId);
+    if (!layer) return;
+    return {
+      ...baseSlider,
+      label: `${capitalize(layer.blendMode)} Amount`,
+      value: layer.blendAmount,
+      onValue: (v) => {
+        updateScene([dashboardId, ...scenePath.slice(0, -1)], (scene) => {
+          if (scene.type !== 'layers') return scene;
+          return {
+            ...scene,
+            layers: scene.layers.map((layer) => {
+              if (layer.key !== layerId) return layer;
+              return { ...layer, blendAmount: v };
+            }),
+          };
+        });
+      },
+    };
+  } else if (fieldPath[0] === 'effects' && scene.type === 'video') {
+    const effectFieldKey = fieldPath[1];
+    const effect = scene!.effects?.find((effect) => `effect_${effect.key}` === effectFieldKey);
+    const effectField = fieldPath[2];
+    function updateEffect(updater: (effect: Effect) => Effect) {
+      updateSliderScene((scene) => {
+        if (scene.type !== 'video') return scene;
+        return {
+          ...scene,
+          effects: scene.effects?.map((effect) => {
+            if (`effect_${effect.key}` !== effectFieldKey) return effect;
+            return updater(effect);
+          }),
+        };
+      });
+    }
+    if (!effect) return;
+    if (effect.type === 'hueShift') {
+      return {
+        ...baseSlider,
+        value: effect.value,
+        onValue: (v) => {
+          updateEffect((effect) => ({ ...effect, value: v }));
+        },
+      };
+    } else if (effect.type === 'desaturate' && effectField === 'value') {
+      return {
+        ...baseSlider,
+        value: effect.value,
+        onValue: (v) => {
+          updateEffect((effect) => ({ ...effect, value: v }));
+        },
+      };
+    } else if (effect.type === 'colorize' && effectField === 'amount') {
+      return {
+        ...baseSlider,
+        value: effect.amount,
+        onValue: (v) => {
+          updateEffect((effect) => ({ ...effect, amount: v }));
+        },
+      };
+    } else if (effect.type === 'colorize' && effectField === 'saturation') {
+      return {
+        ...baseSlider,
+        value: effect.saturation,
+        onValue: (v) => {
+          updateEffect((effect) => ({ ...effect, saturation: v }));
+        },
+      };
+    } else if (effect.type === 'colorize' && effectField === 'hue') {
+      return {
+        ...baseSlider,
+        value: effect.hue,
+        onValue: (v) => {
+          updateEffect((effect) => ({ ...effect, hue: v }));
+        },
+        min: -180,
+        max: 180,
+        step: 1,
+      };
+    } else if (effect.type === 'darken' && effectField === 'value') {
+      return {
+        ...baseSlider,
+        value: effect.value,
+        onValue: (v) => {
+          updateEffect((effect) => ({ ...effect, value: v }));
+        },
+      };
+    } else if (effect.type === 'brighten' && effectField === 'value') {
+      return {
+        ...baseSlider,
+        value: effect.value,
+        onValue: (v) => {
+          updateEffect((effect) => ({ ...effect, value: v }));
+        },
+      };
+    } else if (effect.type === 'rotate' && effectField === 'value') {
+      return {
+        ...baseSlider,
+        value: effect.value,
+        onValue: (v) => {
+          updateEffect((effect) => ({ ...effect, value: v }));
+        },
+      };
+    }
+  }
 }
 
 export function bounceField(rootSceneId: 'live' | 'ready', fieldPath: string) {

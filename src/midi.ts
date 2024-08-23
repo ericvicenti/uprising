@@ -68,7 +68,7 @@ export function initMidiController() {
     if (liveSlider !== -1) {
       const midiControl = liveDashboard?.sliders[liveSlider];
       if (!midiControl) return;
-      midiControl.onValue(value);
+      midiControl.slider.onValue(value);
 
       return;
     }
@@ -76,7 +76,7 @@ export function initMidiController() {
     if (readySlider !== -1) {
       const midiControl = readyDashboard?.sliders[readySlider];
       if (!midiControl) return;
-      midiControl.onValue(value);
+      midiControl.slider.onValue(value);
       return;
     }
     console.log('midi event', event);

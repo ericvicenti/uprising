@@ -52,6 +52,7 @@ import {
   createBlankEffect,
   createBlankScene,
   dashboards,
+  DashboardSliderState,
   DashboardState,
   DashboardStateItem,
   editDashboard,
@@ -85,7 +86,7 @@ import {
   TransitionState,
   VideoScene,
 } from './state-schema';
-import { DefaultSmoothing } from './constants';
+import { DefaultBounceAmount, DefaultBounceDuration, DefaultSmoothing } from './constants';
 // import { isEqual } from 'lodash';
 
 function isEqual(a: any, b: any) {
@@ -610,7 +611,7 @@ function EditDashboardScreen({
           dashboard?.items?.map((item) => ({
             label: (
               <Button marginHorizontal="$4" marginVertical="$1" disabled>
-                {item.label}
+                {item.breadcrumbs.map((b) => b.label).join(': ') + ': ' + item.label}
               </Button>
             ),
             key: item.key,
@@ -627,17 +628,51 @@ function EditDashboardScreen({
 
 function EditDashboardItemScreen({ item, dashboardKey }: { item: DashboardStateItem; dashboardKey: 'live' | 'ready' }) {
   return (
-    <YStack>
+    <YStack padding="$4" gap="$4">
       <StackScreen title={item.label} headerBackTitle={' '} />
+      <DashboardItemHeader item={item} />
+      <SizableText color="$color9">{item.hardwareLabel}</SizableText>
       <Button
+        icon={<LucideIcon icon="Trash" />}
         onPress={() => {
           editDashboard(dashboardKey, (d) => d.filter((i) => i.key !== item.key));
           return response(goBack());
         }}
       >
-        Delete Item
+        Remove from Dashboard
       </Button>
     </YStack>
+  );
+}
+
+function DashboardGradientDropdown({ item, slider }: { item: DashboardStateItem; slider: DashboardSliderState }) {
+  const { scenePath, field } = item;
+  const { label, value, step, onValue, smoothing, fieldPath, bounceAmount, bounceDuration } = slider;
+  const min = slider.min ?? 0;
+  const max = slider.max ?? 1;
+
+  return (
+    <GradientFieldDropdown
+      label={label}
+      scenePath={[item.dashboardId, ...scenePath]}
+      value={value}
+      onValueChange={onValue}
+      min={min}
+      max={max}
+      step={step ?? 0.01}
+      smoothing={smoothing ?? DefaultSmoothing}
+      sliderField={field}
+      triggerButtonProps={{
+        size: '$2',
+        theme: 'blue',
+        iconAfter: <LucideIcon icon="Gauge" />,
+      }}
+      onSliderFields={getSliderFieldUpdater(scenePath)}
+      fieldPath={fieldPath}
+      bounceAmount={bounceAmount ?? DefaultBounceAmount}
+      bounceDuration={bounceDuration ?? DefaultBounceDuration}
+      maxBounceAmount={Math.abs(max - min)}
+    />
   );
 }
 
@@ -648,53 +683,67 @@ function DashboardItemHeader({ item }: { item: DashboardStateItem }) {
         {item.breadcrumbs.map((breadcrumbItem) => (
           <Button
             paddingHorizontal="$1"
-            paddingVertical="$2"
+            size="$2"
             chromeless
             onPress={navigate(`control/${breadcrumbItem.controlPath.join(':')}`)}
           >
             {breadcrumbItem.label}
           </Button>
         ))}
-        <Button iconAfter={<LucideIcon icon="Gauge" />} theme="blue">
-          {item.label}
-        </Button>
-      </XStack>
-      <XStack jc="flex-end">
-        <Text color="$color9">{item.hardwareLabel}</Text>
+        {item.slider ? <DashboardGradientDropdown item={item} slider={item.slider} /> : <Text>{item.label}</Text>}
       </XStack>
     </YStack>
+  );
+}
+
+function DashboardItemFooter({ item }: { item: DashboardStateItem }) {
+  return (
+    <XStack jc="flex-end">
+      <Button
+        size="$2"
+        color="$color8"
+        onPress={navigate(`dashboard_edit_item/${item.dashboardId}/${item.key}`)}
+        iconAfter={<LucideIcon color="$color8" icon="Settings" />}
+        chromeless
+      >
+        {item.hardwareLabel}
+      </Button>
+    </XStack>
   );
 }
 
 function DashboardItem({ item }: { item: DashboardStateItem }) {
   if (item.type === 'button') {
     return (
-      <YStack>
+      <YStack gap="$1">
         <DashboardItemHeader item={item} />
         <Button
           onPress={() => {
             item.onPress();
           }}
+          size="$5"
         >
-          {item.label}
+          {item.buttonLabel}
         </Button>
+        <DashboardItemFooter item={item} />
       </YStack>
     );
   } else if (item.type === 'slider') {
     return (
-      <YStack>
+      <YStack gap="$1">
         <DashboardItemHeader item={item} />
         <SmoothSlider
-          value={item.value}
+          value={item.slider.value}
           onValueChange={(value) => {
-            item.onValue(value);
+            item.slider.onValue(value);
           }}
-          min={item.min ?? 0}
-          max={item.max ?? 1}
-          step={item.step ?? 0.01}
-          smoothing={item.smoothing ?? DefaultSmoothing}
+          min={item.slider.min ?? 0}
+          max={item.slider.max ?? 1}
+          step={item.slider.step ?? 0.01}
+          smoothing={item.slider.smoothing ?? DefaultSmoothing}
           size={50}
         />
+        <DashboardItemFooter item={item} />
       </YStack>
     );
   }
@@ -995,7 +1044,7 @@ function EffectBrightenControls({ effect, onEffect, sliderFields, scenePath }: E
         label="Brighten Amount"
         value={effect.value}
         scenePath={scenePath}
-        fieldPath={['effects', effect.key, 'value']}
+        fieldPath={['effects', `effect_${effect.key}`, 'value']}
         onValueChange={(v) => onEffect((e) => ({ ...e, value: v }))}
         sliderFields={sliderFields}
       />
@@ -1010,7 +1059,7 @@ function EffectDarkenControls({ effect, onEffect, sliderFields, scenePath }: Eff
         label="Darken Amount"
         value={effect.value}
         scenePath={scenePath}
-        fieldPath={['effects', effect.key, 'value']}
+        fieldPath={['effects', `effect_${effect.key}`, 'value']}
         onValueChange={(v) => onEffect((e) => ({ ...e, value: v }))}
         sliderFields={sliderFields}
       />
@@ -1030,7 +1079,7 @@ function EffectDesaturateControls({
         label="Desaturate Amount"
         value={effect.value}
         scenePath={scenePath}
-        fieldPath={['effects', effect.key, 'value']}
+        fieldPath={['effects', `effect_${effect.key}`, 'value']}
         onValueChange={(v) => onEffect((e) => ({ ...e, value: v }))}
         sliderFields={sliderFields}
       />
@@ -1045,7 +1094,7 @@ function EffectColorizeControls({ effect, onEffect, sliderFields, scenePath }: E
         label="Colorize Amount"
         value={effect.amount}
         scenePath={scenePath}
-        fieldPath={['effects', effect.key, 'amount']}
+        fieldPath={['effects', `effect_${effect.key}`, 'amount']}
         onValueChange={(v) => onEffect((e) => ({ ...e, amount: v }))}
         sliderFields={sliderFields}
       />
@@ -1061,7 +1110,7 @@ function EffectColorizeControls({ effect, onEffect, sliderFields, scenePath }: E
         step={1}
         value={effect.hue}
         scenePath={scenePath}
-        fieldPath={['effects', effect.key, 'hue']}
+        fieldPath={['effects', `effect_${effect.key}`, 'hue']}
         onValueChange={(v) => onEffect((e) => ({ ...e, hue: v }))}
         sliderFields={sliderFields}
       />
@@ -1070,7 +1119,7 @@ function EffectColorizeControls({ effect, onEffect, sliderFields, scenePath }: E
         label="Saturation"
         value={effect.saturation}
         scenePath={scenePath}
-        fieldPath={['effects', effect.key, 'saturation']}
+        fieldPath={['effects', `effect_${effect.key}`, 'saturation']}
         onValueChange={(v) => onEffect((e) => ({ ...e, saturation: v }))}
         sliderFields={sliderFields}
       />
@@ -1086,7 +1135,7 @@ function EffectRotateControls({ effect, onEffect, sliderFields, scenePath }: Eff
         label="Rotation"
         value={effect.value}
         scenePath={scenePath}
-        fieldPath={['effects', effect.key, 'value']}
+        fieldPath={['effects', `effect_${effect.key}`, 'value']}
         onValueChange={onValueChange}
         sliderFields={sliderFields}
       />
@@ -1126,7 +1175,7 @@ function EffectHueShiftControls({ effect, onEffect, sliderFields, scenePath }: E
         max={180}
         value={effect.value}
         scenePath={scenePath}
-        fieldPath={['effects', effect.key, 'value']}
+        fieldPath={['effects', `effect_${effect.key}`, 'value']}
         onValueChange={(v) => onEffect((e) => ({ ...e, value: v }))}
         sliderFields={sliderFields}
       />
@@ -1258,6 +1307,133 @@ function Section({ title, children }: { title?: string; children: any }) {
   );
 }
 
+function GradientFieldDropdown({
+  label,
+  bounceAmount,
+  maxBounceAmount,
+  bounceDuration,
+  smoothing,
+  scenePath,
+  fieldPath,
+  step,
+  min,
+  max,
+  value,
+  onValueChange,
+  sliderField,
+  triggerButtonProps,
+  onSliderFields,
+}: {
+  label: string;
+  sliderField: string;
+  triggerButtonProps: Parameters<typeof BottomSheetTriggerButton>[0];
+  onSliderFields: (update: (m: SliderFields) => SliderFields) => void;
+  bounceAmount: number;
+  maxBounceAmount: number;
+  bounceDuration: number;
+  smoothing: number;
+  scenePath: string[];
+  fieldPath: string[];
+  step?: number;
+  min?: number;
+  max?: number;
+  value: number;
+  onValueChange: (v: number) => void;
+}) {
+  return (
+    <BottomSheet
+      frameProps={{ padding: 0 }}
+      trigger={<BottomSheetTriggerButton {...triggerButtonProps}>{label}</BottomSheetTriggerButton>}
+    >
+      <SheetScrollView>
+        <Section title={label}>
+          <SmoothSlider
+            value={value}
+            min={min == undefined ? 0 : min}
+            step={step == undefined ? 0.01 : step}
+            max={max == undefined ? 1 : max}
+            onValueChange={(v) => onValueChange(v)}
+            size={50}
+            smoothing={smoothing}
+          />
+          <Label>Smoothing</Label>
+          <SmoothSlider
+            value={smoothing}
+            step={0.01}
+            max={1}
+            size={50}
+            smoothing={0}
+            onValueChange={(v) => {
+              onSliderFields((fields) => ({
+                ...fields,
+                [sliderField]: { ...(fields[sliderField] || {}), smoothing: v },
+              }));
+            }}
+          />
+        </Section>
+        <Section title="Value Bounce">
+          <Label>Amount: {Math.round(bounceAmount * 10) / 10}</Label>
+          <SmoothSlider
+            value={bounceAmount}
+            step={step}
+            max={maxBounceAmount}
+            min={-maxBounceAmount}
+            size={50}
+            smoothing={0}
+            onValueChange={(v) => {
+              onSliderFields((fields) => ({
+                ...fields,
+                [sliderField]: { ...(fields[sliderField] || {}), bounceAmount: v },
+              }));
+            }}
+          />
+          <Label>Duration: {Math.round(bounceDuration / 100) / 10} sec</Label>
+          <SmoothSlider
+            value={bounceDuration}
+            max={6_000}
+            min={0}
+            step={10}
+            size={50}
+            smoothing={0}
+            onValueChange={(v) => {
+              onSliderFields((fields) => ({
+                ...fields,
+                [sliderField]: { ...(fields[sliderField] || {}), bounceDuration: v },
+              }));
+            }}
+          />
+          <Button
+            onPress={() => {
+              const fullBounceKey = [...scenePath, ...fieldPath].join(':');
+              bounceTimes[fullBounceKey] = Date.now();
+            }}
+          >
+            Trigger Bounce
+          </Button>
+        </Section>
+        <Section title="Dashboard">
+          <Button
+            onPress={async () => {
+              await addSliderToDashboard(scenePath, fieldPath);
+              return response(toast(`Added ${label} Slider to Dashboard`));
+            }}
+          >
+            Add Slider to Dashboard
+          </Button>
+          <Button
+            onPress={async () => {
+              await addBounceToDashboard(scenePath, fieldPath);
+              return response(toast(`Added ${label} Bounce Button to Dashboard`));
+            }}
+          >
+            Add Bounce to Dashboard
+          </Button>
+        </Section>
+      </SheetScrollView>
+    </BottomSheet>
+  );
+}
+
 function GradientSlider({
   label,
   value,
@@ -1280,106 +1456,37 @@ function GradientSlider({
   fieldPath: string[];
 }) {
   const [rootScene, ...innerScenePath] = scenePath;
-  const sliderKey = [...innerScenePath, ...fieldPath].join(':');
-  const fieldSettings = sliderFields?.[sliderKey];
+  const sliderField = [...innerScenePath, ...fieldPath].join(':');
+  const fieldSettings = sliderFields?.[sliderField];
   const smoothing = fieldSettings?.smoothing == null ? 0.5 : fieldSettings.smoothing;
   const maxBounceAmount = Math.abs(max - min);
   const bounceAmount = fieldSettings?.bounceAmount == null ? 1 : fieldSettings.bounceAmount;
   const bounceDuration = fieldSettings?.bounceDuration == null ? 1000 : fieldSettings.bounceDuration;
-  const onSliderFields = getSliderFieldUpdater(scenePath);
   return (
     <YStack>
-      <BottomSheet
-        frameProps={{ padding: 0 }}
-        trigger={
-          <BottomSheetTriggerButton
-            paddingHorizontal={0}
-            size="$2"
-            iconAfter={<LucideIcon icon="Gauge" />}
-            chromeless
-            justifyContent="flex-start"
-          >
-            {label}
-          </BottomSheetTriggerButton>
-        }
-      >
-        <SheetScrollView>
-          <Section title={label}>
-            <Label>Smoothing</Label>
-            <SmoothSlider
-              value={smoothing}
-              step={0.01}
-              max={1}
-              size={50}
-              smoothing={0}
-              onValueChange={(v) => {
-                onSliderFields((fields) => ({
-                  ...fields,
-                  [sliderKey]: { ...(fields[sliderKey] || {}), smoothing: v },
-                }));
-              }}
-            />
-          </Section>
-          <Section title="Value Bounce">
-            <Label>Amount: {Math.round(bounceAmount * 10) / 10}</Label>
-            <SmoothSlider
-              value={bounceAmount}
-              step={step}
-              max={maxBounceAmount}
-              min={-maxBounceAmount}
-              size={50}
-              smoothing={0}
-              onValueChange={(v) => {
-                onSliderFields((fields) => ({
-                  ...fields,
-                  [sliderKey]: { ...(fields[sliderKey] || {}), bounceAmount: v },
-                }));
-              }}
-            />
-            <Label>Duration: {Math.round(bounceDuration / 100) / 10} sec</Label>
-            <SmoothSlider
-              value={bounceDuration}
-              max={6_000}
-              min={0}
-              step={10}
-              size={50}
-              smoothing={0}
-              onValueChange={(v) => {
-                onSliderFields((fields) => ({
-                  ...fields,
-                  [sliderKey]: { ...(fields[sliderKey] || {}), bounceDuration: v },
-                }));
-              }}
-            />
-            <Button
-              onPress={() => {
-                const fullBounceKey = [...scenePath, ...fieldPath].join(':');
-                bounceTimes[fullBounceKey] = Date.now();
-              }}
-            >
-              Trigger Bounce
-            </Button>
-          </Section>
-          <Section title="Dashboard">
-            <Button
-              onPress={async () => {
-                await addSliderToDashboard(scenePath, fieldPath);
-                return response(toast(`Added ${label} Slider to Dashboard`));
-              }}
-            >
-              Add Slider to Dashboard
-            </Button>
-            <Button
-              onPress={async () => {
-                await addBounceToDashboard(scenePath, fieldPath);
-                return response(toast(`Added ${label} Bounce Button to Dashboard`));
-              }}
-            >
-              Add Bounce to Dashboard
-            </Button>
-          </Section>
-        </SheetScrollView>
-      </BottomSheet>
+      <GradientFieldDropdown
+        label={label}
+        sliderField={sliderField}
+        onSliderFields={getSliderFieldUpdater(scenePath)}
+        triggerButtonProps={{
+          paddingHorizontal: 0,
+          size: '$2',
+          iconAfter: <LucideIcon icon="Gauge" />,
+          chromeless: true,
+          justifyContent: 'flex-start',
+        }}
+        bounceAmount={bounceAmount}
+        maxBounceAmount={maxBounceAmount}
+        bounceDuration={bounceDuration}
+        smoothing={smoothing}
+        scenePath={scenePath}
+        fieldPath={fieldPath}
+        step={step}
+        min={min}
+        max={max}
+        value={value}
+        onValueChange={onValueChange}
+      />
       <SmoothSlider
         value={value}
         min={min == undefined ? 0 : min}

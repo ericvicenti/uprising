@@ -246,21 +246,27 @@ function videoFrameBare(scene: VideoScene, ctx: StateContext, controlPath: strin
   return blackFrame;
 }
 
+function limitRatio(value: number): number {
+  if (value < 0) return 0;
+  if (value > 1) return 1;
+  return value;
+}
+
 function withColorize(frame: Frame, effect: ColorizeEffect, ctx: StateContext, controlPath: string): Frame {
   const amount = applyGradientValue(effect.amount, `${controlPath}:amount`, ctx);
   const hue = applyGradientValue(effect.hue, `${controlPath}:hue`, ctx);
   const saturation = applyGradientValue(effect.saturation, `${controlPath}:saturation`, ctx);
-  return frameColorize(egInfo, frame, amount, hue, saturation);
+  return frameColorize(egInfo, frame, limitRatio(amount), hue, saturation);
 }
 
 function withDesaturate(frame: Frame, effect: DesaturateEffect, ctx: StateContext, controlPath: string): Frame {
   const value = applyGradientValue(effect.value, `${controlPath}:value`, ctx);
-  return frameDesaturate(egInfo, frame, value);
+  return frameDesaturate(egInfo, frame, limitRatio(value));
 }
 
 function withHueShift(frame: Frame, effect: HueShiftEffect, ctx: StateContext, controlPath: string): Frame {
   const value = applyGradientValue(effect.value, `${controlPath}:value`, ctx);
-  return frameHueShift(egInfo, frame, value);
+  return frameHueShift(egInfo, frame, limitRatio(value));
 }
 
 function withRotate(frame: Frame, effect: RotateEffect, ctx: StateContext, controlPath: string): Frame {
@@ -274,15 +280,15 @@ function withInvert(frame: Frame, effect: InvertEffect, ctx: StateContext, contr
 
 function withBrighten(frame: Frame, effect: BrightenEffect, ctx: StateContext, controlPath: string): Frame {
   const value = applyGradientValue(effect.value, `${controlPath}:value`, ctx);
-  return frameBrighten(egInfo, frame, value);
+  return frameBrighten(egInfo, frame, limitRatio(value));
 }
 
 function withDarken(frame: Frame, effect: DarkenEffect, ctx: StateContext, controlPath: string): Frame {
   const value = applyGradientValue(effect.value, `${controlPath}:value`, ctx);
-  return frameDarken(egInfo, frame, value);
+  return frameDarken(egInfo, frame, limitRatio(value));
 }
 
-function withMediaEffect(frame: Frame, effect: Effect, ctx: StateContext, controlPath: string): Frame {
+function withEffect(frame: Frame, effect: Effect, ctx: StateContext, controlPath: string): Frame {
   if (effect.type === 'colorize') return withColorize(frame, effect, ctx, controlPath);
   if (effect.type === 'desaturate') return withDesaturate(frame, effect, ctx, controlPath);
   if (effect.type === 'hueShift') return withHueShift(frame, effect, ctx, controlPath);
@@ -293,17 +299,17 @@ function withMediaEffect(frame: Frame, effect: Effect, ctx: StateContext, contro
   return frame;
 }
 
-function withMediaEffects(frame: Frame, effects: Effects | undefined, ctx: StateContext, controlPath: string): Frame {
+function withEffects(frame: Frame, effects: Effects | undefined, ctx: StateContext, controlPath: string): Frame {
   let outFrame = frame;
   effects?.forEach((effect) => {
-    outFrame = withMediaEffect(outFrame, effect, ctx, `${controlPath}:${effect.key}`);
+    outFrame = withEffect(outFrame, effect, ctx, `${controlPath}:effect_${effect.key}`);
   });
   return outFrame;
 }
 
 function videoFrame(scene: VideoScene, ctx: StateContext, controlPath: string): Frame {
   const frame = videoFrameBare(scene, ctx, controlPath);
-  return withMediaEffects(frame, scene.effects, ctx, `${controlPath}:effects`);
+  return withEffects(frame, scene.effects, ctx, `${controlPath}:effects`);
 }
 
 function layerBlend(frameA: Frame, frameB: Frame, blendMode: 'mix' | 'add' | 'mask', blendAmount: number): Frame {
