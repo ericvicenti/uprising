@@ -5,6 +5,7 @@ import { readFile, writeFile } from 'fs/promises';
 import { mainStatePath } from './paths';
 import { Dashboard, defaultMainState, Effect, MainState, MainStateSchema, Scene, SliderFields } from './state-schema';
 import { get } from 'lodash';
+import { MediaIndex, mediaIndex } from './media';
 
 const [_mainState, setMainState] = state<MainState | null>(null);
 
@@ -164,11 +165,12 @@ export const dashboards = lookup((key) => {
   return view(
     (get) => {
       const state = get(mainState);
+      const media = get(mediaIndex);
       if (!state) return undefined;
       if (key === 'live')
-        return getDashboardState(state.liveScene, state.liveSliderFields, state.liveDashboard, 'live');
+        return getDashboardState(state.liveScene, state.liveSliderFields, state.liveDashboard, 'live', media);
       if (key === 'ready')
-        return getDashboardState(state.readyScene, state.readySliderFields, state.readyDashboard, 'ready');
+        return getDashboardState(state.readyScene, state.readySliderFields, state.readyDashboard, 'ready', media);
       return undefined;
     },
     { compare: true }
@@ -190,18 +192,19 @@ export type DashboardState = {
   buttons: DashboardButtonItem[];
   sliders: DashboardSliderItem[];
 };
-export type DashboardButtonItem = {
-  type: 'button';
+type BaseDashboardItem = {
   key: string;
-  hardwareLabel: string;
   label: string;
+  field: string;
+  hardwareLabel: string;
+  breadcrumbs: { controlPath: string[]; label: string }[];
+};
+export type DashboardButtonItem = BaseDashboardItem & {
+  type: 'button';
   onPress: () => void;
 };
-export type DashboardSliderItem = {
+export type DashboardSliderItem = BaseDashboardItem & {
   type: 'slider';
-  key: string;
-  hardwareLabel: string;
-  label: string;
   value: number;
   onValue: (value: number) => void;
   min?: number;
@@ -211,11 +214,31 @@ export type DashboardSliderItem = {
 };
 export type DashboardStateItem = DashboardButtonItem | DashboardSliderItem;
 
+function getSceneTitle(scene: Scene, mediaIndex: MediaIndex | undefined) {
+  if (scene.label) return scene.label;
+  if (scene.type === 'video') {
+    const file = mediaIndex?.files.find((file) => file.id === scene.track);
+    if (file && file.title) return file.title;
+    return 'Video';
+  }
+  if (scene.type === 'color') return 'Color';
+  if (scene.type === 'layers') return 'Layers';
+  if (scene.type === 'sequence') return 'Sequence';
+}
+
+function labelField(field: string) {
+  const parts = field.split(':');
+  const lastPart = parts.at(-1);
+  if (!lastPart) return '?';
+  return lastPart.charAt(0).toUpperCase() + lastPart.slice(1);
+}
+
 function getDashboardState(
   scene: Scene,
   sliderFields: SliderFields,
   dashboard: Dashboard,
-  dashboardId: 'live' | 'ready'
+  dashboardId: 'live' | 'ready',
+  mediaIndex: MediaIndex | undefined
 ): DashboardState {
   const items: DashboardStateItem[] = [];
   const buttons: DashboardButtonItem[] = [];
@@ -238,12 +261,73 @@ function getDashboardState(
     return '';
   }
   dashboard.forEach((item) => {
+    let breadcrumbWalkPath: string[] = [];
+    let breadcrumbWalkScene: null | Scene = scene;
+    const breadcrumbField = item.field
+      .split(':')
+      .map((term) => {
+        if (!breadcrumbWalkScene) return null;
+        let label = '';
+        if (term.startsWith('layer_')) {
+          const layerKey = term.slice(6);
+          if (breadcrumbWalkScene.type !== 'layers') {
+            breadcrumbWalkScene = null;
+            return null;
+          }
+          const layer = breadcrumbWalkScene.layers.find((layer) => layer.key === layerKey);
+          if (!layer) {
+            breadcrumbWalkScene = null;
+            return null;
+          }
+          breadcrumbWalkScene = layer.scene;
+          const sceneTitle = getSceneTitle(layer.scene, mediaIndex);
+          if (sceneTitle) {
+            label = sceneTitle;
+          }
+        }
+        if (term.startsWith('item_')) {
+          const itemKey = term.slice(5);
+          if (breadcrumbWalkScene.type !== 'sequence') {
+            breadcrumbWalkScene = null;
+            return null;
+          }
+          const item = breadcrumbWalkScene.sequence.find((item) => item.key === itemKey);
+          if (!item) {
+            breadcrumbWalkScene = null;
+            return null;
+          }
+          breadcrumbWalkScene = item.scene;
+          const sceneTitle = getSceneTitle(item.scene, mediaIndex);
+          if (sceneTitle) {
+            label = sceneTitle;
+          }
+        }
+        if (term === 'effects') {
+          label = 'Effects';
+        }
+        if (!label) return null;
+        breadcrumbWalkPath = [...breadcrumbWalkPath, term];
+        return {
+          controlPath: [dashboardId, ...breadcrumbWalkPath],
+          label,
+        };
+      })
+      .filter((i) => !!i);
+    const breadcrumbs = [
+      {
+        controlPath: [dashboardId],
+        label: getSceneTitle(scene, mediaIndex) || '?',
+      },
+      ...breadcrumbField,
+    ];
     if (item.behavior === 'bounce') {
       addButton({
         type: 'button',
         key: item.key,
+        field: item.field,
+        breadcrumbs,
         hardwareLabel: getHardwareButtonLabel(),
-        label: 'Bounce ' + item.field,
+        label: `${labelField(item.field)} Bounce`,
         onPress: () => {
           bounceField(dashboardId, item.field);
         },
@@ -254,8 +338,10 @@ function getDashboardState(
       const baseSlider = {
         type: 'slider',
         key: item.key,
+        field: item.field,
+        breadcrumbs,
         hardwareLabel: getHardwareSliderLabel(),
-        label: 'Slider ' + item.field,
+        label: labelField(item.field),
         smoothing: sliderField?.smoothing,
       } as const;
       let sceneContext: Scene[] = [scene];
@@ -519,6 +605,16 @@ export async function addSliderToDashboard(scenePath: string[], fieldPath: strin
           behavior: 'slider',
         },
       ],
+    };
+  });
+}
+
+export function editDashboard(dashboardKey: 'live' | 'ready', updater: (dashboard: Dashboard) => Dashboard) {
+  const mainStateKey = dashboardKey === 'live' ? 'liveDashboard' : 'readyDashboard';
+  mainStateUpdate((state) => {
+    return {
+      ...state,
+      [mainStateKey]: updater(state[mainStateKey]),
     };
   });
 }

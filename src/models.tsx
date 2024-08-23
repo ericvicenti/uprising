@@ -48,14 +48,13 @@ import {
 import {
   addBounceToDashboard,
   addSliderToDashboard,
-  addToDashboard,
   bounceTimes,
   createBlankEffect,
   createBlankScene,
-  dashboardButtonPress,
   dashboards,
   DashboardState,
   DashboardStateItem,
+  editDashboard,
   mainState,
   mainStateUpdate,
   sceneState,
@@ -152,9 +151,31 @@ export const models = {
   ),
   dashboard: lookup((dashboardKey) => {
     const dashboard = dashboards.get(dashboardKey);
-    return view((get) => (
-      <DashboardScreen dashboardKey={dashboardKey} dashboard={dashboard ? get(dashboard) : undefined} />
-    ));
+    return view((get) => {
+      const dashboardState = dashboard ? get(dashboard) : undefined;
+      if (dashboardKey !== 'live' && dashboardKey !== 'ready') return <Text>Unknown Dashboard</Text>;
+      return <DashboardScreen dashboardKey={dashboardKey} dashboard={dashboardState} />;
+    });
+  }),
+  dashboard_edit: lookup((dashboardKey) => {
+    const dashboard = dashboards.get(dashboardKey);
+    return view((get) => {
+      const dashboardState = dashboard ? get(dashboard) : undefined;
+      if (dashboardKey !== 'live' && dashboardKey !== 'ready') return <Text>Unknown Dashboard</Text>;
+      return <EditDashboardScreen dashboardKey={dashboardKey} dashboard={dashboardState} />;
+    });
+  }),
+  dashboard_edit_item: lookup((dashboardKey) => {
+    return lookup((itemKey) => {
+      return view((get) => {
+        const dashboard = dashboards.get(dashboardKey);
+        const dashboardState = dashboard ? get(dashboard) : undefined;
+        const item = dashboardState?.items?.find((i) => i.key === itemKey);
+        if (dashboardKey !== 'live' && dashboardKey !== 'ready') return <Text>Unknown Dashboard</Text>;
+        if (!item) return <Text>Unknown Item</Text>;
+        return <EditDashboardItemScreen dashboardKey={dashboardKey} item={item} />;
+      });
+    });
   }),
   browse_videos: lookup((fileId) =>
     view(
@@ -557,17 +578,91 @@ function DashboardScreen({ dashboard, dashboardKey }: { dashboardKey: string; da
   return (
     <ScrollView>
       <StackScreen title={title} headerBackTitle={' '} />
-      {dashboard?.items?.map((item) => <DashboardItem item={item} key={item.key} />)}
+      <YStack gap="$4" padding="$4">
+        {dashboard?.items?.filter((item) => !!item).map((item) => <DashboardItem item={item} key={item.key} />)}
+        <Button
+          marginTop="$5"
+          onPress={navigate('dashboard_edit/' + dashboardKey)}
+          icon={<LucideIcon icon="Settings2" />}
+        >
+          Edit Dashboard
+        </Button>
+      </YStack>
     </ScrollView>
+  );
+}
+
+function EditDashboardScreen({
+  dashboard,
+  dashboardKey,
+}: {
+  dashboardKey: 'live' | 'ready';
+  dashboard?: DashboardState;
+}) {
+  const title = dashboardKey === 'live' ? 'Edit Live Dashboard' : 'Edit Ready Dashboard';
+  return (
+    <>
+      <StackScreen title={title} headerBackTitle={' '} />
+      <DraggableFlatList
+        style={{ height: '100%' }}
+        header={<View height="$3" />}
+        data={
+          dashboard?.items?.map((item) => ({
+            label: (
+              <Button marginHorizontal="$4" marginVertical="$1" disabled>
+                {item.label}
+              </Button>
+            ),
+            key: item.key,
+            onPress: navigate(`dashboard_edit_item/${dashboardKey}/${item.key}`),
+          })) || []
+        }
+        onReorder={(keyOrder) => {
+          editDashboard(dashboardKey, (d) => keyOrder.map((key) => d.find((i) => i.key === key)!));
+        }}
+      />
+    </>
+  );
+}
+
+function EditDashboardItemScreen({ item, dashboardKey }: { item: DashboardStateItem; dashboardKey: 'live' | 'ready' }) {
+  return (
+    <YStack>
+      <StackScreen title={item.label} headerBackTitle={' '} />
+      <Button
+        onPress={() => {
+          editDashboard(dashboardKey, (d) => d.filter((i) => i.key !== item.key));
+          return response(goBack());
+        }}
+      >
+        Delete Item
+      </Button>
+    </YStack>
   );
 }
 
 function DashboardItemHeader({ item }: { item: DashboardStateItem }) {
   return (
-    <XStack justifyContent="space-between">
-      <Text>{item.label}</Text>
-      <Text color="$color9">{item.hardwareLabel}</Text>
-    </XStack>
+    <YStack justifyContent="space-between" gap="$2" marginVertical="$2">
+      <XStack flexWrap="wrap" gap="$3">
+        {item.breadcrumbs.map((breadcrumbItem) => (
+          <Button
+            paddingHorizontal="$1"
+            paddingVertical="$2"
+            chromeless
+            onPress={navigate(`control/${breadcrumbItem.controlPath.join(':')}`)}
+          >
+            {breadcrumbItem.label}
+          </Button>
+        ))}
+        <Button iconAfter={<LucideIcon icon="Gauge" />} theme="blue">
+          {item.label}
+        </Button>
+      </XStack>
+      <XStack jc="flex-end">
+        <Text color="$color9">{item.hardwareLabel}</Text>
+      </XStack>
+    </YStack>
   );
 }
 
@@ -1298,49 +1393,6 @@ function GradientSlider({
   );
 }
 
-function EffectSlider({
-  label,
-  value,
-  onValueChange,
-  step,
-  min,
-  max,
-}: {
-  label: string;
-  value: number;
-  onValueChange: (v: number) => void;
-  step?: number;
-  min?: number;
-  max?: number;
-}) {
-  return (
-    <>
-      <Label>{label}</Label>
-      <SmoothSlider
-        value={value}
-        min={min == undefined ? 0 : min}
-        step={step == undefined ? 0.01 : step}
-        max={max == undefined ? 1 : max}
-        onValueChange={(v) => onValueChange(v)}
-        size={50}
-        smoothing={0.5}
-      />
-      {/* <Slider
-        value={[value]}
-        min={min == undefined ? 0 : min}
-        step={step == undefined ? 0.01 : step}
-        max={max == undefined ? 1 : max}
-        onValueChange={([v]) => onValueChange(v)}
-        height={50}
-      >
-        <SliderTrack height={50}>
-          <SliderTrackActive />
-        </SliderTrack>
-      </Slider> */}
-    </>
-  );
-}
-
 function SequenceScreen({ scene, onScene, controlPath, extraControls }: SceneScreenProps<SequenceScene>) {
   return (
     <YStack>
@@ -1430,6 +1482,7 @@ function GenericSceneControls({
   scene: Scene;
   onScene: (update: (m: Scene) => Scene) => void;
 }) {
+  const rootScene = controlPath[0];
   const labelId = `label-${controlPath.join(':')}`;
   return (
     <>
@@ -1455,6 +1508,9 @@ function GenericSceneControls({
         }}
       >
         Save to Library
+      </Button>
+      <Button icon={<LucideIcon icon="LayoutDashboard" />} onPress={navigate(`dashboard/${rootScene}`)}>
+        {rootScene === 'live' ? 'Live Dashboard' : 'Ready Dashboard'}
       </Button>
     </>
   );
