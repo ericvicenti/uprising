@@ -331,6 +331,11 @@ export function getSequenceActiveItem(scene: SequenceScene): SequenceItem | unde
   return sequence.find((scene) => scene.key === activeKey) || scene.sequence[0];
 }
 
+export function getSequenceNextNextActiveIndex(scene: SequenceScene): number {
+  const { sequence, nextActiveKey } = scene;
+  return (sequence.findIndex((item) => item.key === nextActiveKey) + 1) % sequence.length;
+}
+
 function sequenceFrame(scene: SequenceScene, ctx: StateContext, controlPath: string): Frame {
   const activeItem = getSequenceActiveItem(scene);
   const now = ctx.nowTime;
@@ -359,7 +364,14 @@ function sequenceFrame(scene: SequenceScene, ctx: StateContext, controlPath: str
     if (!nextMedia) return activeMediaFrame;
     const nextActiveMediaKey = `${controlPath}.item.${nextActiveKey}`;
     const nextFrame = mediaFrame(nextMedia, ctx, nextActiveMediaKey);
-    if (progress >= 1) return nextFrame;
+    if (progress >= 1) {
+      const nextNextActiveKeyIndex = getSequenceNextNextActiveIndex(scene);
+      scene.activeKey = nextActiveKey;
+      scene.nextActiveKey = scene.sequence[nextNextActiveKeyIndex].key;
+      scene.transitionStartTime = now;
+      scene.transitionEndTime = now + duration;
+      return nextFrame;
+    }
     return transition(egInfo, activeMediaFrame, nextFrame, transitionSpec, progress);
   }
 
