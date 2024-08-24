@@ -58,6 +58,7 @@ import {
   DashboardState,
   DashboardStateItem,
   editDashboard,
+  getSceneEffects,
   mainState,
   mainStateUpdate,
   sceneState,
@@ -391,23 +392,25 @@ function LibraryItemScreen({ item }: { item: string }) {
   return (
     <ScrollView>
       <StackScreen title={item} />
-      <Button
-        onPress={async () => {
-          const itemValue = await getLibraryItem(item);
-          mainStateUpdate((state) => {
-            return {
-              ...state,
-              readyScene: itemValue.scene,
-              readyDashboard: itemValue.dashboard,
-              readySliderFields: itemValue.sliderFields,
-            };
-          });
-          return response(navigate('control/ready'));
-        }}
-        icon={<LucideIcon icon="PlayCircle" />}
-      >
-        Play on Ready
-      </Button>
+      <YStack padding="$4" gap="$4">
+        <Button
+          onPress={async () => {
+            const itemValue = await getLibraryItem(item);
+            mainStateUpdate((state) => {
+              return {
+                ...state,
+                readyScene: itemValue.scene,
+                readyDashboard: itemValue.dashboard,
+                readySliderFields: itemValue.sliderFields,
+              };
+            });
+            return response(navigate('control/ready'));
+          }}
+          icon={<LucideIcon icon="PlayCircle" />}
+        >
+          Play on Ready
+        </Button>
+      </YStack>
       <Section title="Rename Item">
         <RiseForm
           onSubmit={async (values) => {
@@ -419,14 +422,16 @@ function LibraryItemScreen({ item }: { item: string }) {
           <SubmitButton>Rename</SubmitButton>
         </RiseForm>
       </Section>
-      <Button
-        onPress={async () => {
-          await deleteLibraryItem(item);
-          return response(goBack());
-        }}
-      >
-        Delete from Library
-      </Button>
+      <YStack padding="$4">
+        <Button
+          onPress={async () => {
+            await deleteLibraryItem(item);
+            return response(goBack());
+          }}
+        >
+          Delete from Library
+        </Button>
+      </YStack>
     </ScrollView>
   );
 }
@@ -897,14 +902,13 @@ function EffectsScreen({
   controlPath: string[];
 }) {
   if (!scene) return <SizableText>No Scene</SizableText>;
-  if (scene.type !== 'video') return <SizableText>Effects only available on video scenes</SizableText>;
   return (
     <YStack flex={1}>
       <StackScreen title={`Fx: ${getScreenTitle(scene, controlPath)}`} headerBackTitle={' '} />
       <DraggableFlatList
         style={{ height: '100%' }}
         data={
-          scene?.effects?.map((effect) => ({
+          getSceneEffects(scene)?.map((effect) => ({
             label: (
               <Button marginHorizontal="$4" marginVertical="$1" disabled>
                 {effect.type}
@@ -916,7 +920,10 @@ function EffectsScreen({
         }
         // onItemPress={(key) => {}}
         onReorder={(keyOrder) => {
-          onScene((s) => ({ ...s, effects: keyOrder.map((key) => scene.effects?.find((e) => e.key === key)!) }));
+          onScene((s) => ({
+            ...s,
+            effects: keyOrder.map((key) => getSceneEffects(scene)?.find((e) => e.key === key)!),
+          }));
         }}
         header={<View height="$2" />}
         footer={
@@ -964,8 +971,7 @@ function NewEffectButton({
             onPress={() => {
               const newEffect = createBlankEffect(key);
               onScene((scene) => {
-                if (scene.type !== 'video') return scene;
-                return { ...scene, effects: [...(scene.effects || []), newEffect] };
+                return { ...scene, effects: [...(getSceneEffects(scene) || []), newEffect] };
               });
               return response(navigate(`control/${controlPath.join(':')}:effect_${newEffect.key}`));
             }}
@@ -992,13 +998,11 @@ function EffectScreen({
   sliderFields?: SliderFields;
 }) {
   if (!scene) return <SizableText>No Scene</SizableText>;
-  if (scene.type !== 'video') return <SizableText>Effects only available on video scenes</SizableText>;
-  const effect = scene.effects?.find((e) => e.key === effectId);
+  const effect = getSceneEffects(scene)?.find((e) => e.key === effectId);
   let controls = null;
   function onEffect(update: (e: Effect) => Effect) {
     onScene((scene) => {
-      if (scene.type !== 'video') return scene;
-      return { ...scene, effects: (scene.effects || []).map((e) => (e.key === effectId ? update(e) : e)) };
+      return { ...scene, effects: (getSceneEffects(scene) || []).map((e) => (e.key === effectId ? update(e) : e)) };
     });
   }
   const effectProps = {
@@ -1037,8 +1041,7 @@ function EffectScreen({
       <Button
         onPress={() => {
           onScene((scene) => {
-            if (scene.type !== 'video') return scene;
-            return { ...scene, effects: (scene.effects || []).filter((e) => e.key !== effectId) };
+            return { ...scene, effects: (getSceneEffects(scene) || []).filter((e) => e.key !== effectId) };
           });
           return response(goBack());
         }}
@@ -1656,6 +1659,7 @@ function SequenceScreen({ scene, onScene, controlPath, extraControls }: SceneScr
               Go Next
             </Button>
             <NewSequenceItem controlPath={controlPath} onScene={onScene} />
+            <EffectsButton controlPath={controlPath} />
             {extraControls}
             <GenericSceneControls controlPath={controlPath} scene={scene} onScene={onScene} />
             <ResetSceneButton controlPath={controlPath} scene={scene} onScene={onScene} />
@@ -1800,6 +1804,7 @@ function LayersScreen({ scene, onScene, controlPath, extraControls }: SceneScree
         footer={
           <YStack gap="$4" padding="$4">
             <NewLayerButton controlPath={controlPath} onScene={onScene} />
+            <EffectsButton controlPath={controlPath} />
             {extraControls}
             <GenericSceneControls controlPath={controlPath} scene={scene} onScene={onScene} />
             <ResetSceneButton controlPath={controlPath} scene={scene} onScene={onScene} />

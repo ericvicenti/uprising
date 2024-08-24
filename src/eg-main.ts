@@ -346,7 +346,7 @@ function layersFrame(scene: LayersScene, ctx: StateContext, controlPath: string)
     const layerAmount = applyGradientValue(layer.blendAmount, `${layerKey}:blendAmount`, ctx);
     frame = layerBlend(frame, mediaFrame(layer.scene, ctx, layerKey), layer.blendMode, layerAmount);
   });
-  return frame;
+  return withEffects(frame, scene.effects, ctx, `${controlPath}:effects`);
 }
 
 export function getSequenceActiveItem(scene: SequenceScene): SequenceItem | undefined {
@@ -361,32 +361,29 @@ function sequenceFrame(scene: SequenceScene, ctx: StateContext, controlPath: str
   const { transitionStartTime, transitionEndTime, transition: transitionSpec, nextActiveKey } = scene;
   const duration = transitionSpec?.duration || DefaultTransitionDuration;
   if (!activeItem) return blackFrame;
-  const activeMediaKey = `${controlPath}.item.${activeItem.key}`;
+  const activeMediaKey = `${controlPath}:item_${activeItem.key}`;
 
-  const activeMediaFrame = activeItem && mediaFrame(activeItem.scene, ctx, activeMediaKey);
-  if (!activeMediaFrame) {
+  let frame = mediaFrame(activeItem.scene, ctx, activeMediaKey);
+  if (!frame) {
     return blackFrame;
   }
-  if (
-    transitionSpec &&
-    nextActiveKey &&
-    transitionStartTime &&
-    transitionEndTime
-    // transitionEndTime <= now
-    // now <= transitionStartTime + duration
-  ) {
+  if (transitionSpec && nextActiveKey && transitionStartTime && transitionEndTime) {
     // transition in progress
     const progress = (now - transitionStartTime) / duration;
     const nextItem = scene.sequence.find((item) => item.key === nextActiveKey);
     const nextMedia = nextItem?.scene;
-    if (!nextMedia) return activeMediaFrame;
-    const nextActiveMediaKey = `${controlPath}.item.${nextActiveKey}`;
-    const nextFrame = mediaFrame(nextMedia, ctx, nextActiveMediaKey);
-    if (progress >= 1) return nextFrame;
-    return transition(egInfo, activeMediaFrame, nextFrame, transitionSpec, progress);
+    if (nextMedia && progress > 0) {
+      const nextActiveMediaKey = `${controlPath}:item_${nextActiveKey}`;
+      const nextFrame = mediaFrame(nextMedia, ctx, nextActiveMediaKey);
+      if (progress >= 1) {
+        frame = nextFrame;
+      } else {
+        const transitionFrame = transition(egInfo, frame, nextFrame, transitionSpec, progress);
+        frame = transitionFrame;
+      }
+    }
   }
-
-  return mediaFrame(activeItem.scene, ctx, `${controlPath}:item_${activeItem.key}`);
+  return withEffects(frame, scene.effects, ctx, `${controlPath}:effects`);
 }
 
 function mediaFrame(scene: Scene, ctx: StateContext, controlPath: string): Frame {

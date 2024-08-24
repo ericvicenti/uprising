@@ -6,6 +6,7 @@ import { mainStatePath } from './paths';
 import { Dashboard, defaultMainState, Effect, MainState, MainStateSchema, Scene, SliderFields } from './state-schema';
 import { get } from 'lodash';
 import { MediaIndex, mediaIndex } from './media';
+import { DefaultBounceAmount, DefaultBounceDuration } from './constants';
 
 const [_mainState, setMainState] = state<MainState | null>(null);
 
@@ -340,11 +341,7 @@ function getDashboardState(
         }
         if (term.startsWith('effect_')) {
           const effectKey = term.slice(7);
-          if (breadcrumbWalkScene.type !== 'video') {
-            breadcrumbWalkScene = null;
-            return null;
-          }
-          const effect = breadcrumbWalkScene.effects?.find((effect) => effect.key === effectKey);
+          const effect = getSceneEffects(breadcrumbWalkScene)?.find((effect) => effect.key === effectKey);
           if (!effect) {
             breadcrumbWalkScene = null;
             return null;
@@ -390,19 +387,17 @@ function getDashboardState(
     };
     if (item.behavior === 'bounce') {
       const sliderField = sliderFields[item.field];
-      if (sliderField) {
-        addButton({
-          type: 'button',
-          ...baseDashboardItem,
-          hardwareLabel: getHardwareButtonLabel(),
-          label: `Bounce`,
-          buttonLabel: `Bounce ${labelField(fieldPath)} ${sliderField.bounceAmount} (${Math.round((sliderField.bounceDuration || 1000) / 100) / 10} sec)`,
-          onPress: () => {
-            bounceField(dashboardId, item.field);
-          },
-          slider,
-        });
-      }
+      addButton({
+        type: 'button',
+        ...baseDashboardItem,
+        hardwareLabel: getHardwareButtonLabel(),
+        label: `Bounce`,
+        buttonLabel: `Bounce ${labelField(fieldPath)} ${sliderField?.bounceAmount ?? DefaultBounceAmount} (${Math.round((sliderField?.bounceDuration ?? DefaultBounceDuration) / 100) / 10} sec)`,
+        onPress: () => {
+          bounceField(dashboardId, item.field);
+        },
+        slider,
+      });
     } else if (item.behavior === 'slider' && slider) {
       addSlider({
         type: 'slider',
@@ -475,16 +470,15 @@ function getSliderState(
         });
       },
     };
-  } else if (fieldPath[0] === 'effects' && scene.type === 'video') {
+  } else if (fieldPath[0] === 'effects') {
     const effectFieldKey = fieldPath[1];
-    const effect = scene!.effects?.find((effect) => `effect_${effect.key}` === effectFieldKey);
+    const effect = getSceneEffects(scene)?.find((effect) => `effect_${effect.key}` === effectFieldKey);
     const effectField = fieldPath[2];
     function updateEffect(updater: (effect: Effect) => Effect) {
       updateSliderScene((scene) => {
-        if (scene.type !== 'video') return scene;
         return {
           ...scene,
-          effects: scene.effects?.map((effect) => {
+          effects: getSceneEffects(scene)?.map((effect) => {
             if (`effect_${effect.key}` !== effectFieldKey) return effect;
             return updater(effect);
           }),
@@ -585,6 +579,13 @@ function getSliderState(
       };
     }
   }
+}
+
+export function getSceneEffects(scene: Scene): Effect[] | undefined {
+  if (scene.type === 'video') return scene.effects;
+  if (scene.type === 'layers') return scene.effects;
+  if (scene.type === 'sequence') return scene.effects;
+  return undefined;
 }
 
 export function bounceField(rootSceneId: 'live' | 'ready', fieldPath: string) {

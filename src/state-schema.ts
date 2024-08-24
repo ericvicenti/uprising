@@ -118,10 +118,10 @@ export type VideoParams = z.infer<typeof videoParamsSchema>;
 const videoSceneSchema = z.object({
   id: z.string(),
   label: z.string().optional(),
+  effects: effectsSchema.optional(),
   type: z.literal('video'),
   track: z.string().nullable(),
   pauseOnFrame: z.number().nullable().optional(),
-  effects: effectsSchema.optional(),
   params: videoParamsSchema.optional(),
 });
 export type VideoScene = z.infer<typeof videoSceneSchema>;
@@ -160,11 +160,13 @@ export type LayersScene = {
   type: 'layers';
   label?: string;
   layers: Layer[];
+  effects?: Effects;
 };
 const layersSceneSchema: z.ZodType<LayersScene> = z.object({
   type: z.literal('layers'),
   label: z.string().optional(),
   layers: z.array(layerSchema),
+  effects: effectsSchema.optional(),
 });
 
 const sequenceItemSchema = z.object({
@@ -206,6 +208,7 @@ export type SequenceScene = {
   transitionEndTime?: number | undefined;
   transition?: Transition;
   sequence: SequenceItem[];
+  effects?: Effects;
 };
 const sequenceSceneSchema: z.ZodType<SequenceScene> = z.object({
   type: z.literal('sequence'),
@@ -216,6 +219,7 @@ const sequenceSceneSchema: z.ZodType<SequenceScene> = z.object({
   transitionEndTime: z.number().optional(),
   transition: transitionSchema.optional(),
   sequence: z.array(sequenceItemSchema),
+  effects: effectsSchema.optional(),
 });
 
 export type Scene = OffScene | ColorScene | VideoScene | LayersScene | SequenceScene;
