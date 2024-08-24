@@ -13,12 +13,14 @@ import {
   frameInvert,
   frameMask,
   frameMix,
+  frameContrast,
   frameRotate,
 } from './eg-tools';
 import {
   BrightenEffect,
   ColorizeEffect,
   ColorScene,
+  ContrastEffect,
   DarkenEffect,
   DesaturateEffect,
   Effect,
@@ -283,12 +285,18 @@ function withBrighten(frame: Frame, effect: BrightenEffect, ctx: StateContext, c
   return frameBrighten(egInfo, frame, limitRatio(value));
 }
 
+function withContrast(frame: Frame, effect: ContrastEffect, ctx: StateContext, controlPath: string): Frame {
+  const value = applyGradientValue(effect.value, `${controlPath}:value`, ctx);
+  return frameContrast(egInfo, frame, limitRatio(value));
+}
+
 function withDarken(frame: Frame, effect: DarkenEffect, ctx: StateContext, controlPath: string): Frame {
   const value = applyGradientValue(effect.value, `${controlPath}:value`, ctx);
   return frameDarken(egInfo, frame, limitRatio(value));
 }
 
 function withEffect(frame: Frame, effect: Effect, ctx: StateContext, controlPath: string): Frame {
+  if (effect.type === 'contrast') return withContrast(frame, effect, ctx, controlPath);
   if (effect.type === 'colorize') return withColorize(frame, effect, ctx, controlPath);
   if (effect.type === 'desaturate') return withDesaturate(frame, effect, ctx, controlPath);
   if (effect.type === 'hueShift') return withHueShift(frame, effect, ctx, controlPath);

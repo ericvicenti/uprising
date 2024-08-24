@@ -67,6 +67,7 @@ import {
   BrightenEffect,
   ColorizeEffect,
   ColorScene,
+  ContrastEffect,
   DarkenEffect,
   Dashboard,
   DashboardItem,
@@ -88,6 +89,7 @@ import {
 } from './state-schema';
 import { DefaultBounceAmount, DefaultBounceDuration, DefaultSmoothing } from './constants';
 // import { isEqual } from 'lodash';
+type JSXElement = ReturnType<ReturnType<typeof createComponentDefinition>>;
 
 function isEqual(a: any, b: any) {
   return JSON.stringify(a) === JSON.stringify(b);
@@ -444,7 +446,8 @@ function NewScenePicker({
               key={`media-${file.id}`}
               onPress={() => {
                 return onScene({
-                  ...createBlankScene('video'),
+                  type: 'video',
+                  id: randomUUID(),
                   track: file.id,
                   label: file.title,
                 });
@@ -493,8 +496,12 @@ function BrowseMediaScreen({
 }) {
   return (
     <ScrollView>
-      <YStack gap="$4" padding="$4">
-        {media?.files?.map((file) => <Button onPress={navigate(`browse_videos/${file.id}`)}>{file.title}</Button>)}
+      <YStack gap="$1" padding="$4">
+        {media?.files?.map((file) => (
+          <Button size="$3" onPress={navigate(`browse_videos/${file.id}`)}>
+            {file.title}
+          </Button>
+        ))}
       </YStack>
       <Section title="Import">
         <RiseForm
@@ -512,7 +519,7 @@ function BrowseMediaScreen({
           <SubmitButton>Start Import</SubmitButton>
         </RiseForm>
         {importing?.importing?.map((importItem) => (
-          <YStack marginVertical="$3">
+          <YStack marginVertical="$3" key={importItem.id}>
             <Text>{importItem.url}</Text>
             <Text color="$color8">{importItem.state}</Text>
           </YStack>
@@ -554,22 +561,24 @@ function MediaFileScreen({ file }: { file: MediaFile | undefined }) {
           <SubmitButton>Rename</SubmitButton>
         </RiseForm>
       </Section>
-      <Button
-        onPress={() => {
-          duplicateFile(file.id);
-          return response(goBack());
-        }}
-      >
-        Duplicate File
-      </Button>
-      <Button
-        onPress={() => {
-          deleteMediaFile(file.id);
-          return response(goBack());
-        }}
-      >
-        Delete File
-      </Button>
+      <YStack gap="$4" padding="$4">
+        <Button
+          onPress={() => {
+            duplicateFile(file.id);
+            return response(goBack());
+          }}
+        >
+          Duplicate File
+        </Button>
+        <Button
+          onPress={() => {
+            deleteMediaFile(file.id);
+            return response(goBack());
+          }}
+        >
+          Delete File
+        </Button>
+      </YStack>
     </ScrollView>
   );
 }
@@ -819,7 +828,7 @@ function SceneScreen({
   scene: Scene | null | undefined;
   onScene: (update: (s: Scene) => Scene) => void;
   controlPath: string[];
-  extraControls?: JSX.Element | null | undefined;
+  extraControls?: JSXElement | null | undefined;
   onGetMediaIndex: () => MediaIndex | undefined;
   sliderFields?: SliderFields;
 }) {
@@ -855,7 +864,7 @@ type SceneScreenProps<SceneType> = {
   scene: SceneType;
   onScene: (update: (m: Scene) => Scene) => void;
   controlPath: string[];
-  extraControls?: JSX.Element | null | undefined;
+  extraControls?: JSXElement | null | undefined;
   onGetMediaIndex: () => MediaIndex | undefined;
   sliderFields?: SliderFields;
 };
@@ -923,6 +932,7 @@ const EffectTypes: Readonly<{ label: string; key: Effect['type'] }[]> = [
   { key: 'invert', label: 'Invert' },
   { key: 'hueShift', label: 'Hue Shift' },
   { key: 'brighten', label: 'Brighten' },
+  { key: 'contrast', label: 'Contrast' },
   { key: 'darken', label: 'Darken' },
   { key: 'rotate', label: 'Rotate' },
 ] as const;
@@ -995,6 +1005,9 @@ function EffectScreen({
   if (effect?.type === 'brighten') {
     controls = <EffectBrightenControls effect={effect} {...effectProps} />;
   }
+  if (effect?.type === 'contrast') {
+    controls = <EffectContrastControls effect={effect} {...effectProps} />;
+  }
   if (effect?.type === 'darken') {
     controls = <EffectDarkenControls effect={effect} {...effectProps} />;
   }
@@ -1042,6 +1055,21 @@ function EffectBrightenControls({ effect, onEffect, sliderFields, scenePath }: E
     <YStack>
       <GradientSlider
         label="Brighten Amount"
+        value={effect.value}
+        scenePath={scenePath}
+        fieldPath={['effects', `effect_${effect.key}`, 'value']}
+        onValueChange={(v) => onEffect((e) => ({ ...e, value: v }))}
+        sliderFields={sliderFields}
+      />
+    </YStack>
+  );
+}
+
+function EffectContrastControls({ effect, onEffect, sliderFields, scenePath }: EffectControlsProps<ContrastEffect>) {
+  return (
+    <YStack>
+      <GradientSlider
+        label="Contrast Amount"
         value={effect.value}
         scenePath={scenePath}
         fieldPath={['effects', `effect_${effect.key}`, 'value']}
@@ -1298,7 +1326,7 @@ function SqeuenceItemControls({
   );
 }
 
-function Section({ title, children }: { title?: string; children: any }) {
+function Section({ title, children }: { title?: string; children?: JSXElement }) {
   return (
     <YStack gap="$4" padding="$4">
       {title ? <Heading>{title}</Heading> : null}
@@ -1610,6 +1638,7 @@ function GenericSceneControls({
       <Button
         icon={<LucideIcon icon="Download" />}
         onPress={async () => {
+          console.log('Write Library Item', controlPath, scene);
           await writeLibraryItem(controlPath, scene);
           return response(toast('Saved to Library'));
         }}
@@ -1865,22 +1894,46 @@ function ResetSceneButton({
 
 function VideoScreen({ scene, onScene, controlPath, onGetMediaIndex, extraControls }: SceneScreenProps<VideoScene>) {
   const index = onGetMediaIndex();
+  const trackOptions = index?.files.map((file) => ({ key: file.id, label: file.title }));
   return (
     <ScrollView>
       <YStack marginVertical="$4" marginHorizontal="$4" gap="$4">
         {scene?.track ? (
-          <Button onPress={navigate(`browse_videos/${scene.track}`)} iconAfter={<LucideIcon icon="ChevronRight" />}>
-            {index?.files.find((file) => file.id === scene.track)?.title || scene.track}
-          </Button>
+          <XStack gap="$2">
+            <Button
+              flex={1}
+              onPress={navigate(`browse_videos/${scene.track}`)}
+              iconAfter={<LucideIcon icon="ChevronRight" />}
+            >
+              {index?.files.find((file) => file.id === scene.track)?.title || scene.track}
+            </Button>
+            {trackOptions && (
+              <SelectDropdown
+                triggerLabel=""
+                triggerProps={{ icon: <LucideIcon icon="Library" />, chromeless: true }}
+                value={scene?.track}
+                options={trackOptions}
+                onSelect={(key) => {
+                  onScene(() => ({
+                    ...scene,
+                    track: key,
+                    label: index?.files.find((f) => f.id === key)?.title || '?',
+                  }));
+                }}
+              />
+            )}
+          </XStack>
         ) : index?.files ? (
-          <SelectDropdown
-            emptyLabel="Select a video track"
-            value={scene?.track}
-            options={index?.files.map((file) => ({ key: file.id, label: file.title }))}
-            onSelect={(key) => {
-              onScene(() => ({ ...scene, track: key, label: index.files.find((f) => f.id === key)?.title }));
-            }}
-          />
+          trackOptions && (
+            <SelectDropdown
+              emptyLabel="Select a video track"
+              value={scene?.track}
+              options={trackOptions}
+              onSelect={(key) => {
+                onScene(() => ({ ...scene, track: key, label: index.files.find((f) => f.id === key)?.title }));
+              }}
+            />
+          )
         ) : (
           <Spinner />
         )}
@@ -1925,11 +1978,11 @@ function SelectDropdown<Options extends Readonly<{ label: string; key: string }[
     <BottomSheet
       trigger={
         <BottomSheetTriggerButton iconAfter={<LucideIcon icon="ChevronDown" />} {...triggerProps}>
-          {triggerLabel || options.find((o) => o.key === value)?.label || emptyLabel}
+          {triggerLabel ?? options.find((o) => o.key === value)?.label ?? emptyLabel}
         </BottomSheetTriggerButton>
       }
     >
-      <ScrollView>
+      <SheetScrollView>
         <YStack>
           {options.map((option) => (
             <BottomSheetCloseButton
@@ -1943,7 +1996,7 @@ function SelectDropdown<Options extends Readonly<{ label: string; key: string }[
             </BottomSheetCloseButton>
           ))}
         </YStack>
-      </ScrollView>
+      </SheetScrollView>
     </BottomSheet>
   );
 }

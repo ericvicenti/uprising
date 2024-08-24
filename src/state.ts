@@ -437,15 +437,6 @@ function getSliderState(
   scene: Scene,
   parentScene: Scene | undefined
 ): DashboardSliderState | undefined {
-  console.log('getSliderState', {
-    dashboardId,
-    sliderFields,
-    fieldPath,
-    scenePath,
-    scene,
-    parentScene,
-  });
-
   const field = [...scenePath, ...fieldPath].join(':');
   const sliderField = sliderFields[field];
   const baseSlider = {
@@ -613,6 +604,12 @@ export function createBlankEffect(type: Effect['type']): Effect {
       key: randomUUID(),
       type: 'desaturate',
       value: 0,
+    };
+  if (type === 'contrast')
+    return {
+      key: randomUUID(),
+      type: 'contrast',
+      value: 0.5,
     };
   if (type === 'colorize')
     return {

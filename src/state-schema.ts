@@ -71,6 +71,13 @@ const rotateEffectSchema = z.object({
 });
 export type RotateEffect = z.infer<typeof rotateEffectSchema>;
 
+const contrastEffectSchema = z.object({
+  key: z.string(),
+  type: z.literal('contrast'),
+  value: z.number(), // range from 0-1
+});
+export type ContrastEffect = z.infer<typeof contrastEffectSchema>;
+
 const invertEffectSchema = z.object({
   key: z.string(),
   type: z.literal('invert'),
@@ -85,6 +92,7 @@ const effectSchema = z.discriminatedUnion('type', [
   brightenEffectSchema,
   darkenEffectSchema,
   rotateEffectSchema,
+  contrastEffectSchema,
 ]);
 export type Effect = z.infer<typeof effectSchema>;
 
