@@ -4,9 +4,9 @@ import { existsSync } from 'fs';
 import { readFile, writeFile } from 'fs/promises';
 import { mainStatePath } from './paths';
 import { Dashboard, defaultMainState, Effect, MainState, MainStateSchema, Scene, SliderFields } from './state-schema';
-import { get } from 'lodash';
 import { MediaIndex, mediaIndex } from './media';
 import { DefaultBounceAmount, DefaultBounceDuration } from './constants';
+import { getSequenceActiveItem } from './eg-main';
 
 const [_mainState, setMainState] = state<MainState | null>(null);
 
@@ -60,6 +60,7 @@ function sceneUpdater(prevScene: Scene, path: string[], updater: (scene: Scene) 
     const [layerTerm, ...rest] = path;
     const layerKey = layerTerm.slice(6);
     if (prevScene.type !== 'layers') return prevScene;
+    // todo, avoid returning a new state object if the layer's scene is actually unchanged
     return {
       ...prevScene,
       layers: prevScene.layers.map((layer) => {
@@ -75,6 +76,7 @@ function sceneUpdater(prevScene: Scene, path: string[], updater: (scene: Scene) 
     const [itemTerm, ...rest] = path;
     const itemKey = itemTerm.slice(5);
     if (prevScene.type !== 'sequence') return prevScene;
+    // todo, avoid returning a new state object if the sequnce item's scene is actually unchanged
     return {
       ...prevScene,
       sequence: prevScene.sequence.map((item) => {
@@ -92,15 +94,19 @@ function sceneUpdater(prevScene: Scene, path: string[], updater: (scene: Scene) 
 export function updateScene(path: string[], updater: (scene: Scene) => Scene) {
   mainStateUpdate((state) => {
     if (path[0] === 'live') {
+      const scene = sceneUpdater(state.liveScene, path.slice(1), updater);
+      if (scene === state.liveScene) return state;
       return {
         ...state,
-        liveScene: sceneUpdater(state.liveScene, path.slice(1), updater),
+        liveScene: scene,
       };
     }
     if (path[0] === 'ready') {
+      const scene = sceneUpdater(state.readyScene, path.slice(1), updater);
+      if (scene === state.readyScene) return state;
       return {
         ...state,
-        readyScene: sceneUpdater(state.readyScene, path.slice(1), updater),
+        readyScene: scene,
       };
     }
     return state;
@@ -278,7 +284,7 @@ function getDashboardState(
   dashboard.forEach((item) => {
     let breadcrumbWalkPath: string[] = [];
     let breadcrumbWalkScene: null | Scene = scene;
-    let sceneContext: Scene[] = [scene];
+    let sceneContext: (Scene | null)[] = [scene];
     const fieldPath = item.field.split(':');
     const afterScenePathIndex = fieldPath.findIndex((fieldTerm, termIndex) => {
       if (fieldTerm.startsWith('layer_')) {
@@ -286,14 +292,14 @@ function getDashboardState(
         const lastScene = sceneContext.at(-1)!;
         if (lastScene.type !== 'layers') return;
         const layer = lastScene.layers.find((layer) => layer.key === layerKey);
-        sceneContext.push(layer!.scene);
+        sceneContext.push(layer?.scene || null);
         return false;
       } else if (fieldTerm.startsWith('item_')) {
         const itemKey = fieldTerm.slice(5);
         const lastScene = sceneContext.at(-1)!;
         if (lastScene.type !== 'sequence') return;
         const item = lastScene.sequence.find((item) => item.key === itemKey);
-        sceneContext.push(item!.scene);
+        sceneContext.push(item?.scene || null);
         return false;
       } else {
         return true;
@@ -366,6 +372,8 @@ function getDashboardState(
       },
       ...breadcrumbField,
     ];
+    const sliderScene = sceneContext.at(-1);
+    if (!sliderScene) return;
     const slider =
       item.behavior === 'slider' || item.behavior === 'bounce'
         ? getSliderState(
@@ -373,8 +381,8 @@ function getDashboardState(
             sliderFields,
             fieldPath.slice(afterScenePathIndex),
             scenePath,
-            sceneContext.at(-1)!,
-            sceneContext.at(-2)
+            sliderScene,
+            sceneContext.at(-2) || undefined
           )
         : undefined;
     const baseDashboardItem = {
@@ -422,6 +430,43 @@ function getDashboardState(
     buttons,
     sliders,
   };
+}
+
+export function goNext(controlPath: string[]) {
+  updateScene(controlPath, (scene) => {
+    if (scene.type !== 'sequence') {
+      console.warn('goNext on non-sequence media');
+      return scene;
+    }
+    if (!scene.sequence.length) return scene;
+    const active = getSequenceActiveItem(scene);
+    if (!active) {
+      console.warn('goNext: active media not identified');
+      return scene;
+    }
+    const activeIndex = scene.sequence.findIndex((item) => item.key === active.key);
+    if (activeIndex === -1) {
+      console.warn('goNext: active media not found in sequence');
+      return scene;
+    }
+    const nextIndex = (activeIndex + 1) % scene.sequence.length;
+    const nextKey = scene.sequence[nextIndex]?.key;
+    if (!nextKey) {
+      console.warn('goNext: next media not identified');
+      return scene;
+    }
+    let transitionDuration = 0;
+    if (scene.transition?.duration) {
+      transitionDuration = scene.transition.duration;
+    }
+    const now = Date.now();
+    return {
+      ...scene,
+      nextActiveKey: nextKey,
+      transitionEndTime: now + transitionDuration,
+      transitionStartTime: now,
+    };
+  });
 }
 
 function getSliderState(

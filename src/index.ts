@@ -7,7 +7,7 @@ import { mainVideo } from './eg-video-playback';
 import { createEGViewServer } from './eg-view-server';
 import { initMidiController } from './midi';
 import { models } from './models';
-import { bounceTimes, mainState, mainStateUpdate } from './state';
+import { bounceTimes, goNext, mainState, mainStateUpdate, updateScene } from './state';
 import { MainState, Scene } from './state-schema';
 
 initMidiController();
@@ -165,14 +165,11 @@ mainState.subscribe((state) => {
     }
     return false;
   });
-  // handleVideoEndBehavior();
-
+  handleSequenceTransitionEnding(state);
+  handleSequenceVideoEnding(state);
   // handleAudioPlayback(state, prevState);
   prevState = state;
 });
-
-// function mainStateEffect(state: MainState, prevState: MainState) {
-// }
 
 // const audioPlayers: Record<string, AudioPlayer> = {};
 
@@ -219,53 +216,27 @@ mainState.subscribe((state) => {
 //   // console.log('videoNodesToStop', videoNodesToStop)
 // }
 
-function handleVideoEndBehavior() {
-  const state = mainState.get();
+function handleSequenceTransitionEnding(state: MainState) {
   if (!state) return;
   matchAllScenes(state, (scene, controlPath) => {
     if (scene.type !== 'sequence') return false;
-    const controlPathString = controlPath.join('.');
-    const activeItem = getSequenceActiveItem(scene);
-    if (!activeItem) return false;
-    if (activeItem.scene.type !== 'video') return false;
-    if (!activeItem.goOnVideoEnd) return false;
-    const player = mainVideo.getPlayer(activeItem.scene.id);
-    if (!player) return false;
-    const playingFrame = player.getPlayingFrame();
-    const frameCount = player.getFrameCount();
-    if (playingFrame === null || frameCount === null) return false;
-    const framesRemaining = frameCount - playingFrame;
-    const approxTimeRemaining = (1000 * framesRemaining) / mainAnimationFPS;
-    clearTimeout(sequenceVideoEndTransitions[controlPathString]);
-    sequenceVideoEndTransitions[controlPathString] = setTimeout(
-      () => {
-        // console.log('video ended. going next.')
-        delete sequenceVideoEndTransitions[controlPathString];
-        delete sequenceAutoTransitions[controlPathString];
-        goNext(controlPath);
-      },
-      Math.max(1, approxTimeRemaining)
-    );
-  });
-  matchAllScenes(mainState, (scene, controlPath) => {
-    if (scene.type !== 'sequence') return false;
-    const controlPathString = controlPath.join('.');
+    const controlPathString = controlPath.join(':');
     const { transitionEndTime, transition } = scene;
     if (transitionEndTime && transition) {
       // handle video transition ending
       clearTimeout(sequenceTransitionEnds[controlPathString]);
       const now = Date.now();
       const timeRemaining = transitionEndTime - now;
-      // const progress = 1 - timeRemaining / transition.duration // actually wedont need this
+      console.log('timeRemaining', controlPath, timeRemaining);
       sequenceTransitionEnds[controlPathString] = setTimeout(
         () => {
           delete sequenceTransitionEnds[controlPathString];
-          rootSceneUpdate(controlPathString.split('.'), (media: Media): Media => {
-            if (media.type !== 'sequence') return media;
-            const { nextActiveKey } = media;
-            if (!nextActiveKey) return media;
+          updateScene(controlPath, (scene: Scene): Scene => {
+            if (scene.type !== 'sequence') return scene;
+            const { nextActiveKey } = scene;
+            if (!nextActiveKey) return scene;
             return {
-              ...media,
+              ...scene,
               transitionEndTime: undefined,
               transitionStartTime: undefined,
               activeKey: nextActiveKey,
@@ -276,18 +247,40 @@ function handleVideoEndBehavior() {
         },
         Math.max(1, timeRemaining)
       );
-      // console.log('player', approxTimeRemaining)
       return true;
     }
     return false;
   });
 }
 
-// setInterval(() => {
-//   handleVideoEndBehavior();
-// }, 250);
-
-// mainStateEffect(mainState, mainState);
+function handleSequenceVideoEnding(state: MainState) {
+  // matchAllScenes(state, (scene, controlPath) => {
+  //   if (scene.type !== 'sequence') return false;
+  //   const controlPathString = controlPath.join(':');
+  //   const activeItem = getSequenceActiveItem(scene);
+  //   if (!activeItem) return false;
+  //   if (activeItem.scene.type !== 'video') return false;
+  //   if (!activeItem.goOnVideoEnd) return false;
+  //   const player = mainVideo.getPlayer(activeItem.scene.id);
+  //   if (!player) return false;
+  //   const playingFrame = player.getPlayingFrame();
+  //   const frameCount = player.getFrameCount();
+  //   if (playingFrame === null || frameCount === null) return false;
+  //   const framesRemaining = frameCount - playingFrame;
+  //   const approxTimeRemaining = (1000 * framesRemaining) / mainAnimationFPS;
+  //   clearTimeout(sequenceVideoEndTransitions[controlPathString]);
+  //   sequenceVideoEndTransitions[controlPathString] = setTimeout(
+  //     () => {
+  //       // console.log('video ended. going next.')
+  //       delete sequenceVideoEndTransitions[controlPathString];
+  //       delete sequenceAutoTransitions[controlPathString];
+  //       goNext(controlPath);
+  //     },
+  //     Math.max(1, approxTimeRemaining)
+  //   );
+  //   return true;
+  // });
+}
 
 function fetchMedia(scene: Scene, path: string[]): [string[], Scene][] {
   if (scene.type === 'layers') {
@@ -300,7 +293,7 @@ function fetchMedia(scene: Scene, path: string[]): [string[], Scene][] {
 }
 
 function fetchAllScenes(state: MainState): [string[], Scene][] {
-  return [...fetchMedia(state.liveScene, ['liveScene']), ...fetchMedia(state.readyScene, ['readyScene'])];
+  return [...fetchMedia(state.liveScene, ['live']), ...fetchMedia(state.readyScene, ['ready'])];
 }
 
 function fetchActiveScene(scene: Scene, path: string[]): [string[], Scene][] {
@@ -320,7 +313,7 @@ function fetchActiveScene(scene: Scene, path: string[]): [string[], Scene][] {
 }
 
 function fetchAllActiveScene(state: MainState): [string[], Scene][] {
-  return [...fetchActiveScene(state.liveScene, ['liveScene']), ...fetchActiveScene(state.readyScene, ['readyScene'])];
+  return [...fetchActiveScene(state.liveScene, ['live']), ...fetchActiveScene(state.readyScene, ['ready'])];
 }
 
 function getSceneCrawl(media: Scene, path: string[]): Scene | undefined {

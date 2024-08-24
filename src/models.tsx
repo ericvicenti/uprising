@@ -59,6 +59,7 @@ import {
   DashboardStateItem,
   editDashboard,
   getSceneEffects,
+  goNext,
   mainState,
   mainStateUpdate,
   sceneState,
@@ -243,7 +244,7 @@ export const models = {
           });
         }
       };
-      return <NewScenePicker onScene={onScene} library={lib} media={media} />;
+      return <NewScenePicker behaviorLabel="Reset to" onScene={onScene} library={lib} media={media} />;
     })
   ),
   add_scene: lookup((scenePath) =>
@@ -253,11 +254,12 @@ export const models = {
 
       return (
         <NewScenePicker
+          behaviorLabel="Add"
           library={lib}
           media={media}
           onScene={(newChildScene) => {
             const key = randomUUID();
-            let navigatePath: string | undefined = undefined;
+            let navigatePath = '';
             updateScene(scenePath.split(':'), (scene: Scene) => {
               if (scene.type === 'layers') {
                 const newLayer: Layer = {
@@ -436,59 +438,90 @@ function LibraryItemScreen({ item }: { item: string }) {
   );
 }
 
+function ButtonGroup({
+  items,
+  Button,
+}: {
+  items?: { key: string; label: string; onPress: () => void }[];
+  Button: (props: Parameters<typeof BottomSheetCloseButton>[0]) => JSXElement;
+}) {
+  if (!items) return null;
+  return (
+    <XStack gap="$1" flexWrap="wrap" jc="center">
+      {items.map((item) => (
+        <Button
+          size="$3"
+          marginBottom="$1"
+          key={item.key}
+          onPress={item.onPress}
+          flexGrow={1}
+          flexShrink={0}
+          flexBasis="30%"
+          maxWidth={300}
+          minWidth={240}
+        >
+          {item.label}
+        </Button>
+      ))}
+    </XStack>
+  );
+}
+
 function NewScenePicker({
   onScene,
   media,
   library,
+  behaviorLabel,
 }: {
   onScene: (scene: Scene, other?: { dashboard?: Dashboard; sliderFields?: SliderFields }) => void;
   media: MediaIndex | undefined;
   library?: string[];
+  behaviorLabel: string;
 }) {
   return (
     <SheetScrollView>
       <YStack>
-        <Section title="Media">
-          {media?.files?.map((file) => (
-            <BottomSheetCloseButton
-              key={`media-${file.id}`}
-              onPress={() => {
+        <Section title={`${behaviorLabel} Video`}>
+          <ButtonGroup
+            Button={BottomSheetCloseButton}
+            items={media?.files?.map((file) => ({
+              key: file.id,
+              label: file.title,
+              onPress: () => {
                 return onScene({
                   type: 'video',
                   id: randomUUID(),
                   track: file.id,
                   label: file.title,
                 });
-              }}
-            >
-              {file.title}
-            </BottomSheetCloseButton>
-          ))}
+              },
+            }))}
+          />
         </Section>
-        <Section title="Library">
-          {library?.map((libraryItem) => (
-            <BottomSheetCloseButton
-              key={`lib-${libraryItem}`}
-              onPress={async () => {
+        <Section title={`${behaviorLabel} Library Scene`}>
+          <ButtonGroup
+            Button={BottomSheetCloseButton}
+            items={library?.map((libraryItem) => ({
+              key: libraryItem,
+              label: libraryItem,
+              onPress: async () => {
                 const item = await getLibraryItem(libraryItem);
                 return onScene(item.scene, { dashboard: item.dashboard, sliderFields: item.sliderFields });
-              }}
-            >
-              {libraryItem}
-            </BottomSheetCloseButton>
-          ))}
+              },
+            }))}
+          />
         </Section>
-        <Section title="New Scene">
-          {SceneTypes.map(({ key, label }) => (
-            <BottomSheetCloseButton
-              key={`new-${key}`}
-              onPress={() => {
+        <Section title={`${behaviorLabel} New Scene`}>
+          <ButtonGroup
+            Button={BottomSheetCloseButton}
+            items={SceneTypes.map(({ key, label }) => ({
+              key,
+              label,
+              onPress: () => {
                 return onScene(createBlankScene(key));
-              }}
-            >
-              {label}
-            </BottomSheetCloseButton>
-          ))}
+              },
+            }))}
+          />
         </Section>
       </YStack>
     </SheetScrollView>
@@ -1590,6 +1623,13 @@ function GradientSlider({
 }
 
 function SequenceScreen({ scene, onScene, controlPath, extraControls }: SceneScreenProps<SequenceScene>) {
+  const activeItemKey = scene.activeKey || scene.sequence[0]?.key;
+  const nextItemKey = scene.nextActiveKey;
+  function bgColorOfItem(item: SequenceItem) {
+    if (item.key === activeItemKey) return '$green4';
+    if (item.key === nextItemKey) return '$yellow4';
+    return undefined;
+  }
   return (
     <YStack>
       <DraggableFlatList
@@ -1597,12 +1637,7 @@ function SequenceScreen({ scene, onScene, controlPath, extraControls }: SceneScr
         data={
           scene?.sequence?.map((item) => ({
             label: (
-              <Button
-                marginHorizontal="$4"
-                marginVertical="$1"
-                backgroundColor={scene.activeKey === item.key ? '$green4' : undefined}
-                disabled
-              >
+              <Button marginHorizontal="$4" marginVertical="$1" backgroundColor={bgColorOfItem(item)} disabled>
                 {getScreenTitle(item.scene, [...controlPath, `item_${item.key}`])}
               </Button>
             ),
@@ -1620,40 +1655,7 @@ function SequenceScreen({ scene, onScene, controlPath, extraControls }: SceneScr
             <Button
               icon={<LucideIcon icon="Play" />}
               onPress={() => {
-                onScene((scene) => {
-                  if (scene.type !== 'sequence') {
-                    console.warn('goNext on non-sequence media');
-                    return scene;
-                  }
-                  if (!scene.sequence.length) return scene;
-                  const active = getSequenceActiveItem(scene);
-                  if (!active) {
-                    console.warn('goNext: active media not identified');
-                    return scene;
-                  }
-                  const activeIndex = scene.sequence.findIndex((item) => item.key === active.key);
-                  if (activeIndex === -1) {
-                    console.warn('goNext: active media not found in sequence');
-                    return scene;
-                  }
-                  const nextIndex = (activeIndex + 1) % scene.sequence.length;
-                  const nextKey = scene.sequence[nextIndex]?.key;
-                  if (!nextKey) {
-                    console.warn('goNext: next media not identified');
-                    return scene;
-                  }
-                  let transitionDuration = 0;
-                  if (scene.transition?.duration) {
-                    transitionDuration = scene.transition.duration;
-                  }
-                  const now = Date.now();
-                  return {
-                    ...scene,
-                    nextActiveKey: nextKey,
-                    transitionEndTime: now + transitionDuration,
-                    transitionStartTime: now,
-                  };
-                });
+                goNext(controlPath);
               }}
             >
               Go Next
@@ -1824,43 +1826,10 @@ function NewLayerButton({
 }) {
   return (
     <BottomSheet
+      frameProps={{ padding: 0 }}
       trigger={<BottomSheetTriggerButton icon={<LucideIcon icon="PlusCircle" />}>New Layer</BottomSheetTriggerButton>}
     >
       {ref('add_scene/' + controlPath.join(':'))}
-    </BottomSheet>
-  );
-
-  return (
-    <BottomSheet
-      trigger={
-        <YStack>
-          <Separator marginVertical="$4" />
-          return (
-          {/* <BottomSheetTriggerButton icon={<LucideIcon icon="PlusCircle" />}>New Layer</BottomSheetTriggerButton> */}
-        </YStack>
-      }
-    >
-      <YStack gap="$3">
-        {SceneTypes.map(({ key, label }) => (
-          <BottomSheetCloseButton
-            onPress={() => {
-              const newLayer: Layer = {
-                scene: createBlankScene(key),
-                key: randomUUID(),
-                blendMode: 'mix',
-                blendAmount: 0,
-              };
-              onScene((scene) => {
-                if (scene.type !== 'layers') return scene;
-                return { ...scene, layers: [newLayer, ...(scene.layers || [])] };
-              });
-              return response(navigate(`control/${controlPath.join(':')}:layer_${newLayer.key}`));
-            }}
-          >
-            {label}
-          </BottomSheetCloseButton>
-        ))}
-      </YStack>
     </BottomSheet>
   );
 }
@@ -1874,41 +1843,12 @@ function NewSequenceItem({
 }) {
   return (
     <BottomSheet
+      frameProps={{ padding: 0 }}
       trigger={
         <BottomSheetTriggerButton icon={<LucideIcon icon="PlusCircle" />}>New Sequence Scene</BottomSheetTriggerButton>
       }
     >
       {ref('add_scene/' + controlPath.join(':'))}
-    </BottomSheet>
-  );
-  return (
-    <BottomSheet
-      trigger={
-        <YStack>
-          <Separator marginVertical="$4" />
-          <BottomSheetTriggerButton icon={<LucideIcon icon="PlusCircle" />}>Add to Sequence</BottomSheetTriggerButton>
-        </YStack>
-      }
-    >
-      <YStack gap="$3">
-        {SceneTypes.map(({ key, label }) => (
-          <BottomSheetCloseButton
-            onPress={() => {
-              const newLayer: SequenceItem = {
-                scene: createBlankScene(key),
-                key: randomUUID(),
-              };
-              onScene((scene) => {
-                if (scene.type !== 'sequence') return scene;
-                return { ...scene, sequence: [...(scene.sequence || []), newLayer] };
-              });
-              return response(navigate(`control/${controlPath.join(':')}:item_${newLayer.key}`));
-            }}
-          >
-            {label}
-          </BottomSheetCloseButton>
-        ))}
-      </YStack>
     </BottomSheet>
   );
 }
@@ -1940,18 +1880,6 @@ function ResetSceneButton({
     >
       {ref('reset_scene/' + controlPath.join(':'))}
     </BottomSheet>
-  );
-
-  return (
-    <SelectDropdown
-      value={scene?.type || 'off'}
-      options={SceneTypes}
-      triggerProps={{ theme: 'red', icon: <LucideIcon icon="UndoDot" /> }}
-      triggerLabel="Reset Scene"
-      onSelect={(key) => {
-        onScene(() => createBlankScene(key));
-      }}
-    />
   );
 }
 
