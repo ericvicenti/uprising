@@ -71,6 +71,15 @@ const rotateEffectSchema = z.object({
 });
 export type RotateEffect = z.infer<typeof rotateEffectSchema>;
 
+const prismEffectSchema = z.object({
+  key: z.string(),
+  type: z.literal('prism'),
+  mirror: z.boolean(),
+  slices: z.number(),
+  offset: z.number(), // range from 0-1
+});
+export type PrismEffect = z.infer<typeof prismEffectSchema>;
+
 const contrastEffectSchema = z.object({
   key: z.string(),
   type: z.literal('contrast'),
@@ -93,6 +102,7 @@ const effectSchema = z.discriminatedUnion('type', [
   darkenEffectSchema,
   rotateEffectSchema,
   contrastEffectSchema,
+  prismEffectSchema,
 ]);
 export type Effect = z.infer<typeof effectSchema>;
 

@@ -551,6 +551,30 @@ function getSliderState(
           updateEffect((effect) => ({ ...effect, value: v }));
         },
       };
+    } else if (effect.type === 'contrast' && effectField === 'value') {
+      return {
+        ...baseSlider,
+        value: effect.value,
+        onValue: (v) => {
+          updateEffect((effect) => ({ ...effect, value: v }));
+        },
+      };
+    } else if (effect.type === 'prism' && effectField === 'offset') {
+      return {
+        ...baseSlider,
+        value: effect.offset,
+        onValue: (v) => {
+          updateEffect((effect) => ({ ...effect, offset: v }));
+        },
+      };
+    } else if (effect.type === 'prism' && effectField === 'slices') {
+      return {
+        ...baseSlider,
+        value: effect.slices,
+        onValue: (v) => {
+          updateEffect((effect) => ({ ...effect, slices: v }));
+        },
+      };
     } else if (effect.type === 'rotate' && effectField === 'value') {
       return {
         ...baseSlider,
@@ -610,6 +634,14 @@ export function createBlankEffect(type: Effect['type']): Effect {
       key: randomUUID(),
       type: 'contrast',
       value: 0.5,
+    };
+  if (type === 'prism')
+    return {
+      key: randomUUID(),
+      type: 'prism',
+      mirror: false,
+      slices: 1,
+      offset: 0,
     };
   if (type === 'colorize')
     return {

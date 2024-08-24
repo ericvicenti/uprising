@@ -128,6 +128,28 @@ export function frameContrast(info: EGInfo, frame: Frame, amount: number) {
   return outputFrame;
 }
 
+export function framePrism(info: EGInfo, frame: Frame, slices: number, offset: number, mirror: boolean) {
+  const { frameSize, egStageRadials, egStageStripLength } = info;
+  const outputFrame = new Uint8Array(frameSize);
+  const offsetStripStart = Math.floor(egStageRadials * offset);
+  for (let stripIndex = 0; stripIndex < egStageRadials; stripIndex++) {
+    const sliceWidth = Math.round(egStageRadials / slices);
+    let baseStripIndex = stripIndex % sliceWidth;
+    if (mirror && baseStripIndex >= sliceWidth / 2) {
+      baseStripIndex = sliceWidth - baseStripIndex;
+    }
+    const sourceStripIndex = (baseStripIndex + offsetStripStart) % egStageRadials;
+    for (let pixelIndex = 0; pixelIndex < egStageStripLength; pixelIndex++) {
+      const destByteIndex = (stripIndex * egStageStripLength + pixelIndex) * 3;
+      const sourceByteIndex = (sourceStripIndex * egStageStripLength + pixelIndex) * 3;
+      outputFrame[destByteIndex + 0] = frame[sourceByteIndex + 0];
+      outputFrame[destByteIndex + 1] = frame[sourceByteIndex + 1];
+      outputFrame[destByteIndex + 2] = frame[sourceByteIndex + 2];
+    }
+  }
+  return outputFrame;
+}
+
 function adjustChannel(original: number, gray: number, amount: number) {
   if (amount > 0) {
     // Reduce saturation by blending the channel towards gray

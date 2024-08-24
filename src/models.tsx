@@ -21,6 +21,8 @@ import {
   SizableText,
   Spinner,
   SubmitButton,
+  Switch,
+  SwitchThumb,
   Text,
   toast,
   View,
@@ -78,6 +80,7 @@ import {
   LayersScene,
   MainState,
   OffScene,
+  PrismEffect,
   RotateEffect,
   Scene,
   SequenceItem,
@@ -932,6 +935,7 @@ const EffectTypes: Readonly<{ label: string; key: Effect['type'] }[]> = [
   { key: 'invert', label: 'Invert' },
   { key: 'hueShift', label: 'Hue Shift' },
   { key: 'brighten', label: 'Brighten' },
+  { key: 'prism', label: 'Prism' },
   { key: 'contrast', label: 'Contrast' },
   { key: 'darken', label: 'Darken' },
   { key: 'rotate', label: 'Rotate' },
@@ -1008,6 +1012,9 @@ function EffectScreen({
   if (effect?.type === 'contrast') {
     controls = <EffectContrastControls effect={effect} {...effectProps} />;
   }
+  if (effect?.type === 'prism') {
+    controls = <EffectPrismControls effect={effect} {...effectProps} />;
+  }
   if (effect?.type === 'darken') {
     controls = <EffectDarkenControls effect={effect} {...effectProps} />;
   }
@@ -1074,6 +1081,45 @@ function EffectContrastControls({ effect, onEffect, sliderFields, scenePath }: E
         scenePath={scenePath}
         fieldPath={['effects', `effect_${effect.key}`, 'value']}
         onValueChange={(v) => onEffect((e) => ({ ...e, value: v }))}
+        sliderFields={sliderFields}
+      />
+    </YStack>
+  );
+}
+
+function EffectPrismControls({ effect, onEffect, sliderFields, scenePath }: EffectControlsProps<PrismEffect>) {
+  return (
+    <YStack gap="$2">
+      <GradientSlider
+        label="Slice Count"
+        value={effect.slices}
+        scenePath={scenePath}
+        fieldPath={['effects', `effect_${effect.key}`, 'slices']}
+        step={1}
+        min={1}
+        max={16}
+        onValueChange={(v) => onEffect((e) => ({ ...e, slices: v }))}
+        sliderFields={sliderFields}
+      />
+      <YStack gap="$1" marginVertical="$1">
+        <Text>Mirror</Text>
+        <Switch
+          checked={effect.mirror}
+          backgroundColor={effect.mirror ? '$green9' : null}
+          onCheckedChange={(mirror: boolean) => {
+            console.log('onCheckedChange', mirror);
+            onEffect((e) => ({ ...e, mirror }));
+          }}
+        >
+          <SwitchThumb backgroundColor="$color11" />
+        </Switch>
+      </YStack>
+      <GradientSlider
+        label="Offset Input Slice"
+        value={effect.offset}
+        scenePath={scenePath}
+        fieldPath={['effects', `effect_${effect.key}`, 'offset']}
+        onValueChange={(v) => onEffect((e) => ({ ...e, offset: v }))}
         sliderFields={sliderFields}
       />
     </YStack>
@@ -1350,11 +1396,13 @@ function GradientFieldDropdown({
   onValueChange,
   sliderField,
   triggerButtonProps,
+  triggerButtonContent,
   onSliderFields,
 }: {
   label: string;
   sliderField: string;
   triggerButtonProps: Parameters<typeof BottomSheetTriggerButton>[0];
+  triggerButtonContent?: JSXElement;
   onSliderFields: (update: (m: SliderFields) => SliderFields) => void;
   bounceAmount: number;
   maxBounceAmount: number;
@@ -1371,7 +1419,9 @@ function GradientFieldDropdown({
   return (
     <BottomSheet
       frameProps={{ padding: 0 }}
-      trigger={<BottomSheetTriggerButton {...triggerButtonProps}>{label}</BottomSheetTriggerButton>}
+      trigger={
+        <BottomSheetTriggerButton {...triggerButtonProps}>{triggerButtonContent ?? label}</BottomSheetTriggerButton>
+      }
     >
       <SheetScrollView>
         <Section title={label}>
@@ -1499,10 +1549,18 @@ function GradientSlider({
         triggerButtonProps={{
           paddingHorizontal: 0,
           size: '$2',
-          iconAfter: <LucideIcon icon="Gauge" />,
           chromeless: true,
           justifyContent: 'flex-start',
         }}
+        triggerButtonContent={
+          <XStack ai="center" jc="space-between" flex={1}>
+            <XStack ai="center" gap="$2">
+              <Text>{label}</Text>
+              <LucideIcon icon="Gauge" />
+            </XStack>
+            <Text>{value}</Text>
+          </XStack>
+        }
         bounceAmount={bounceAmount}
         maxBounceAmount={maxBounceAmount}
         bounceDuration={bounceDuration}

@@ -15,6 +15,7 @@ import {
   frameMix,
   frameContrast,
   frameRotate,
+  framePrism,
 } from './eg-tools';
 import {
   BrightenEffect,
@@ -29,6 +30,7 @@ import {
   InvertEffect,
   LayersScene,
   MainState,
+  PrismEffect,
   RotateEffect,
   Scene,
   SequenceItem,
@@ -276,6 +278,12 @@ function withRotate(frame: Frame, effect: RotateEffect, ctx: StateContext, contr
   return frameRotate(egInfo, frame, value);
 }
 
+function withPrism(frame: Frame, effect: PrismEffect, ctx: StateContext, controlPath: string): Frame {
+  const offset = applyGradientValue(effect.offset, `${controlPath}:offset`, ctx);
+  const slices = applyGradientValue(effect.slices, `${controlPath}:slices`, ctx);
+  return framePrism(egInfo, frame, slices, offset, effect.mirror);
+}
+
 function withInvert(frame: Frame, effect: InvertEffect, ctx: StateContext, controlPath: string): Frame {
   return frameInvert(egInfo, frame);
 }
@@ -304,6 +312,7 @@ function withEffect(frame: Frame, effect: Effect, ctx: StateContext, controlPath
   if (effect.type === 'brighten') return withBrighten(frame, effect, ctx, controlPath);
   if (effect.type === 'darken') return withDarken(frame, effect, ctx, controlPath);
   if (effect.type === 'rotate') return withRotate(frame, effect, ctx, controlPath);
+  if (effect.type === 'prism') return withPrism(frame, effect, ctx, controlPath);
   return frame;
 }
 
