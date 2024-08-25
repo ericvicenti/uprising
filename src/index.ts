@@ -227,7 +227,6 @@ function handleSequenceTransitionEnding(state: MainState) {
       clearTimeout(sequenceTransitionEnds[controlPathString]);
       const now = Date.now();
       const timeRemaining = transitionEndTime - now;
-      console.log('timeRemaining', controlPath, timeRemaining);
       sequenceTransitionEnds[controlPathString] = setTimeout(
         () => {
           delete sequenceTransitionEnds[controlPathString];
@@ -254,33 +253,39 @@ function handleSequenceTransitionEnding(state: MainState) {
 }
 
 function handleSequenceVideoEnding(state: MainState) {
-  // matchAllScenes(state, (scene, controlPath) => {
-  //   if (scene.type !== 'sequence') return false;
-  //   const controlPathString = controlPath.join(':');
-  //   const activeItem = getSequenceActiveItem(scene);
-  //   if (!activeItem) return false;
-  //   if (activeItem.scene.type !== 'video') return false;
-  //   if (!activeItem.goOnVideoEnd) return false;
-  //   const player = mainVideo.getPlayer(activeItem.scene.id);
-  //   if (!player) return false;
-  //   const playingFrame = player.getPlayingFrame();
-  //   const frameCount = player.getFrameCount();
-  //   if (playingFrame === null || frameCount === null) return false;
-  //   const framesRemaining = frameCount - playingFrame;
-  //   const approxTimeRemaining = (1000 * framesRemaining) / mainAnimationFPS;
-  //   clearTimeout(sequenceVideoEndTransitions[controlPathString]);
-  //   sequenceVideoEndTransitions[controlPathString] = setTimeout(
-  //     () => {
-  //       // console.log('video ended. going next.')
-  //       delete sequenceVideoEndTransitions[controlPathString];
-  //       delete sequenceAutoTransitions[controlPathString];
-  //       goNext(controlPath);
-  //     },
-  //     Math.max(1, approxTimeRemaining)
-  //   );
-  //   return true;
-  // });
+  matchAllScenes(state, (scene, controlPath) => {
+    if (scene.type !== 'sequence') return false;
+    const controlPathString = controlPath.join(':');
+    const activeItem = getSequenceActiveItem(scene);
+    if (!activeItem) return false;
+    if (activeItem.scene.type !== 'video') return false;
+    clearTimeout(sequenceVideoEndTransitions[controlPathString]);
+    if (!activeItem.goNextOnEnd) return false;
+    const player = mainVideo.getPlayer(activeItem.scene.id);
+    if (!player) return false;
+    const playingFrame = player.getPlayingFrame();
+    const frameCount = player.getFrameCount();
+    if (playingFrame === null || frameCount === null) return false;
+    const framesRemaining = frameCount - playingFrame;
+    const approxTimeRemaining = (1000 * framesRemaining) / mainAnimationFPS;
+    sequenceVideoEndTransitions[controlPathString] = setTimeout(
+      () => {
+        console.log('video ended. going next.');
+        delete sequenceVideoEndTransitions[controlPathString];
+        delete sequenceAutoTransitions[controlPathString];
+        goNext(controlPath);
+      },
+      Math.max(1, approxTimeRemaining)
+    );
+    return true;
+  });
 }
+
+setInterval(() => {
+  const state = mainState.get();
+  if (!state) return;
+  handleSequenceVideoEnding(state);
+}, 100);
 
 function fetchMedia(scene: Scene, path: string[]): [string[], Scene][] {
   if (scene.type === 'layers') {

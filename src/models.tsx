@@ -275,6 +275,9 @@ export const models = {
                 const newItem: SequenceItem = {
                   scene: newChildScene,
                   key,
+                  maxDuration: null,
+                  goNextOnEnd: false,
+                  goNextAfterLoops: 1,
                 };
                 navigatePath = `${scenePath}:item_${key}`;
                 return { ...scene, sequence: [...(scene.sequence || []), newItem] };
@@ -1123,6 +1126,59 @@ function EffectContrastControls({ effect, onEffect, sliderFields, scenePath }: E
   );
 }
 
+function SwitchField({
+  label,
+  value,
+  onValueChange,
+}: {
+  label: string;
+  value: boolean;
+  onValueChange: (v: boolean) => void;
+}) {
+  return (
+    <YStack gap="$1" marginVertical="$1">
+      <Text>{label}</Text>
+      <Switch checked={value} backgroundColor={value ? '$green9' : null} onCheckedChange={onValueChange}>
+        <SwitchThumb backgroundColor="$color11" />
+      </Switch>
+    </YStack>
+  );
+}
+
+function NumericField({
+  label,
+  value,
+  step,
+  min,
+  max,
+  onValueChange,
+}: {
+  label: string;
+  value: number;
+  step?: number;
+  min: number;
+  max: number;
+  onValueChange: (v: number) => void;
+}) {
+  return (
+    <YStack gap="$1" marginVertical="$1">
+      <XStack jc="space-between">
+        <Text>{label}</Text>
+        <Text color="$color9">{value}</Text>
+      </XStack>
+      <SmoothSlider
+        value={value}
+        onValueChange={onValueChange}
+        step={step ?? 1}
+        min={min}
+        max={max}
+        size={40}
+        smoothing={0}
+      />
+    </YStack>
+  );
+}
+
 function EffectPrismControls({ effect, onEffect, sliderFields, scenePath }: EffectControlsProps<PrismEffect>) {
   return (
     <YStack gap="$2">
@@ -1137,19 +1193,7 @@ function EffectPrismControls({ effect, onEffect, sliderFields, scenePath }: Effe
         onValueChange={(v) => onEffect((e) => ({ ...e, slices: v }))}
         sliderFields={sliderFields}
       />
-      <YStack gap="$1" marginVertical="$1">
-        <Text>Mirror</Text>
-        <Switch
-          checked={effect.mirror}
-          backgroundColor={effect.mirror ? '$green9' : null}
-          onCheckedChange={(mirror: boolean) => {
-            console.log('onCheckedChange', mirror);
-            onEffect((e) => ({ ...e, mirror }));
-          }}
-        >
-          <SwitchThumb backgroundColor="$color11" />
-        </Switch>
-      </YStack>
+      <SwitchField label="Mirror" value={effect.mirror} onValueChange={(v) => onEffect((e) => ({ ...e, mirror: v }))} />
       <GradientSlider
         label="Offset Input Slice"
         value={effect.offset}
@@ -1390,8 +1434,56 @@ function SqeuenceItemControls({
 }) {
   const item = sequenceScene.sequence?.find((item) => item.key === itemKey);
   if (!item) return null;
+  function onItem(update: (i: SequenceItem) => SequenceItem) {
+    onScene((scene) => {
+      if (scene.type !== 'sequence') return scene;
+      return {
+        ...scene,
+        sequence: scene.sequence?.map((i) => (i.key === itemKey ? update(i) : i)),
+      };
+    });
+  }
   return (
     <Section title="Sequence Item">
+      <SwitchField
+        label="Go Next on End"
+        value={item.goNextOnEnd || false}
+        onValueChange={(goNextOnEnd) => {
+          onItem((i) => ({ ...i, goNextOnEnd }));
+        }}
+      />
+      {/* <NumericField
+        label="Go Next After Loop Count"
+        value={item.goNextAfterLoops ?? 1}
+        onValueChange={(goNextAfterLoops) => {
+          onItem((i) => ({ ...i, goNextAfterLoops }));
+        }}
+        min={1}
+        max={20}
+      /> */}
+      <Button
+        icon={<LucideIcon icon="PlayCircle" />}
+        onPress={() => {
+          onScene((scene) => {
+            if (scene.type !== 'sequence') return scene;
+            if (scene.activeKey === itemKey) return scene;
+            if (!scene.sequence.length) return scene;
+            let transitionDuration = 0;
+            if (scene.transition?.duration) {
+              transitionDuration = scene.transition.duration;
+            }
+            const now = Date.now();
+            return {
+              ...scene,
+              nextActiveKey: itemKey,
+              transitionEndTime: now + transitionDuration,
+              transitionStartTime: now,
+            };
+          });
+        }}
+      >
+        Transition to Item
+      </Button>
       <Button
         icon={<LucideIcon icon="Trash" />}
         onPress={() => {

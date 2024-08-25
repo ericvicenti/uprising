@@ -172,13 +172,15 @@ const layersSceneSchema: z.ZodType<LayersScene> = z.object({
 const sequenceItemSchema = z.object({
   key: z.string(),
   maxDuration: z.number().nullable().optional(),
-  goOnVideoEnd: z.boolean().optional(),
+  goNextOnEnd: z.boolean().optional(),
+  goNextAfterLoops: z.number().optional(),
   scene: z.lazy(() => sceneSchema),
 });
 export type SequenceItem = {
   key: string;
   maxDuration?: null | number;
-  goOnVideoEnd?: boolean;
+  goNextOnEnd?: boolean;
+  goNextAfterLoops?: number;
   scene: Scene;
 };
 
