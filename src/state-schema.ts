@@ -273,6 +273,7 @@ export const MainStateSchema = z.object({
   readyDashboard: dashboardSchema,
   liveSliderFields: sliderFieldsSchema,
   readySliderFields: sliderFieldsSchema,
+  effects: effectsSchema.optional(),
 });
 
 export type MainState = z.infer<typeof MainStateSchema>;

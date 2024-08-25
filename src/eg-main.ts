@@ -40,104 +40,6 @@ import {
   VideoScene,
 } from './state-schema';
 
-// const readyVideoPlayers: Record<string, undefined | VideoPlayer> = {}
-// const loadingVideoPlayers: Record<string, undefined | Promise<void>> = {}
-
-// function getVideoPlayback(video: EGVideo, fileId: string) {
-//   if (readyVideoPlayers[fileId]) return readyVideoPlayers[fileId]
-//   if (loadingVideoPlayers[fileId]) return null
-//   loadingVideoPlayers[fileId] = video
-//     .loadVideo(fileId)
-//     .then((player) => {
-//       readyVideoPlayers[fileId] = player
-//     })
-//     .catch((e) => {
-//       console.error('Error loading video', e)
-//     })
-//     .finally(() => {
-//       delete loadingVideoPlayers[fileId]
-//     })
-// }
-
-// const egEffectAppliers: Record<
-//   keyof typeof effectsSchema,
-//   (frame: Uint8Array, progress: number, intensity: number, waveLength: number) => Uint8Array
-// > = {
-//   flash: flashEffect(egInfo),
-//   waveIn: waveFrameLayerEffect(egInfo, true),
-//   waveOut: waveFrameLayerEffect(egInfo, false),
-// }
-
-// const stagelinqLastBeatTime = 0
-// const stagelinqLastMeasureTime = 0
-// const stagelinqBpm = 0
-
-// const effectDuration = 1000
-// function applyEGEffects(mainState: MainState, ctx: StateContext, frame: Uint8Array): Uint8Array {
-//   const outputFrame = frame
-//   const { nowTime } = ctx
-//   effectTypes.forEach((effectName) => {
-//     const applier = egEffectAppliers[effectName]
-//     const lastEffectTime = mainState.effects[effectName]
-//     if (lastEffectTime !== null) {
-//       const quickEffectAmount = Math.min(
-//         1,
-//         Math.max(0, (nowTime - lastEffectTime) / effectDuration)
-//       )
-//       if (quickEffectAmount > 0) {
-//         outputFrame = applier(outputFrame, quickEffectAmount, 1, 0.5)
-//       }
-//     }
-//   })
-//   apply manual beat effect
-//   if (mainState.manualBeat.enabled && false) {
-//     const manualBeatEffectDuration = 60_000 / mainState.manualBeat.bpm
-//     const applyEffect = egEffectAppliers[mainState.beatEffect.effect]
-//     const beatsPassed = ~~((nowTime - mainState.manualBeat.lastBeatTime) / manualBeatEffectDuration)
-//     const lastEffectTime =
-//       mainState.manualBeat.lastBeatTime + beatsPassed * manualBeatEffectDuration
-//     if (lastEffectTime !== null) {
-//       const beatEffectProgress = Math.min(
-//         1,
-//         Math.max(0, (nowTime - lastEffectTime) / manualBeatEffectDuration)
-//       )
-//       if (beatEffectProgress > 0) {
-//         outputFrame = applyEffect(
-//           outputFrame,
-//           beatEffectProgress,
-//           (mainState.beatEffect.intensity / 100) *
-//             (1 - mainState.beatEffect.dropoff * beatEffectProgress),
-//           mainState.beatEffect.waveLength
-//         )
-//       }
-//     }
-//   }
-
-//   if (stagelinqBpm && stagelinqLastMeasureTime && false) {
-//     const beatEffectDuration = (60_000 / stagelinqBpm) * 4
-//     const applyEffect = egEffectAppliers[mainState.beatEffect.effect]
-//     const beatsPassed = ~~((nowTime - stagelinqLastMeasureTime) / beatEffectDuration)
-//     const lastEffectTime = stagelinqLastMeasureTime + beatsPassed * beatEffectDuration
-//     if (lastEffectTime !== null) {
-//       const beatEffectProgress = Math.min(
-//         1,
-//         Math.max(0, (nowTime - lastEffectTime) / beatEffectDuration)
-//       )
-//       // console.log('beat effect progress', beatEffectProgress, stagelinqBpm, stagelinqLastBeatTime)
-//       if (beatEffectProgress > 0) {
-//         outputFrame = applyEffect(
-//           outputFrame,
-//           beatEffectProgress,
-//           (mainState.beatEffect.intensity / 100) *
-//             (1 - mainState.beatEffect.dropoff * beatEffectProgress),
-//           mainState.beatEffect.waveLength
-//         )
-//       }
-//     }
-//   }
-//   return outputFrame
-// }
-
 const blackFrame = createSolidRGBFrame(egInfo, 0, 0, 0);
 
 const defaultInflectionPoint = 0.25;
@@ -220,11 +122,9 @@ function applyGradientValue(destValue: number, valuePath: string, ctx: StateCont
   const bounceDuration = slider?.bounceDuration || DefaultBounceDuration;
   const now = Date.now();
   const bounceProgress = lastBounceTime ? (now - lastBounceTime) / bounceDuration : 0;
-  // if (lastBounceTime) console.log('lastBounceTime', { valuePath, lastBounceTime, bounceProgress })
   if (bounceProgress > 0 && bounceProgress < 1) {
     const bounceRatio = getAsymmetricSmoothBounce(bounceProgress);
     const bounceDeltaValue = bounceAmount * bounceRatio;
-    // console.log('bounceProgress', { bounceProgress, bounceAmount, bounceRatio, bounceDeltaValue })
     nextValue += bounceDeltaValue;
   }
   return nextValue;
@@ -406,7 +306,8 @@ export function getEGLiveFrame(mainState: MainState, ctx: StateContext, readyFra
     transitionProgress = Math.min(1, timeSinceStart / mainState.transition.duration);
   }
 
-  const finalFrame = transition(egInfo, liveFrame, readyFrame, mainState.transition, transitionProgress || 0);
+  const afterTransitionFrame = transition(egInfo, liveFrame, readyFrame, mainState.transition, transitionProgress || 0);
+  const finalFrame = withEffects(afterTransitionFrame, mainState.effects, ctx, 'effects');
   return finalFrame;
 }
 
@@ -420,5 +321,7 @@ function transition(egInfo: EGInfo, frameA: Frame, frameB: Frame, transition: Tr
 }
 
 export function getEGReadyFrame(mainState: MainState, ctx: StateContext): Frame {
-  return mediaFrame(mainState.readyScene, ctx, 'ready');
+  const readyFrame = mediaFrame(mainState.readyScene, ctx, 'ready');
+  const finalFrame = withEffects(readyFrame, mainState.effects, ctx, 'effects');
+  return finalFrame;
 }

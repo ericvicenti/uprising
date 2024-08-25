@@ -143,6 +143,9 @@ export const models = {
         />
       </YStack> */}
             {/* <Text>{JSON.stringify(get(mainState))}</Text> */}
+            <Button onPress={navigate(`global_effects`)} icon={<LucideIcon icon="Sparkles" />}>
+              Global Effects
+            </Button>
           </YStack>
           <Section title="Library">
             <Button icon={<LucideIcon icon="Library" />} onPress={navigate('browse_videos')}>
@@ -292,6 +295,53 @@ export const models = {
       );
     })
   ),
+  global_effects: lookup((effectKey) => {
+    if (effectKey) {
+      return view((get) => {
+        const state = get(mainState);
+        if (!state) return <Spinner />;
+        const effect = state.effects?.find((e) => e.key === effectKey);
+        if (!effect) return <Text>No Effect</Text>;
+        return (
+          <EffectScreen
+            effect={effect}
+            onEffect={(updater) => {
+              mainStateUpdate((state) => {
+                return {
+                  ...state,
+                  effects: state.effects?.map((e) => (e.key === effectKey ? updater(e) : e)),
+                };
+              });
+            }}
+            onRemove={() => {
+              mainStateUpdate((state) => {
+                return {
+                  ...state,
+                  effects: state.effects?.filter((e) => e.key !== effectKey),
+                };
+              });
+              return response(goBack());
+            }}
+          />
+        );
+      });
+    }
+    return view((get) => {
+      const state = get(mainState);
+      if (!state) return <Spinner />;
+      return (
+        <GlobalEffectsScreen
+          effects={state.effects}
+          onEffects={(updater) => {
+            mainStateUpdate((state) => ({
+              ...state,
+              effects: updater(state.effects),
+            }));
+          }}
+        />
+      );
+    });
+  }),
   control: lookup((controlPath) => {
     console.log('control', controlPath);
     const path = controlPath.split(':');
@@ -302,17 +352,33 @@ export const models = {
       if (restPath[1]) {
         const effectId = restPath[1].split('_')[1];
         return view(
-          (get) => (
-            <EffectScreen
-              scene={scene ? get(scene) : null}
-              controlPath={path}
-              effectId={effectId}
-              onScene={(updater) => {
-                updateScene(scenePath, updater);
-              }}
-              sliderFields={sliderFieldsModel ? get(sliderFieldsModel) : undefined}
-            />
-          ),
+          (get) => {
+            const sceneState = scene ? get(scene) : null;
+            if (!sceneState) return <SizableText>No Scene</SizableText>;
+            const effect = getSceneEffects(sceneState)?.find((e) => e.key === effectId);
+            if (!effect) return <SizableText>No Effect</SizableText>;
+            return (
+              <EffectScreen
+                effect={effect}
+                controlPath={path}
+                onEffect={(update: (e: Effect) => Effect) => {
+                  updateScene(scenePath, (scene) => {
+                    return {
+                      ...scene,
+                      effects: (getSceneEffects(scene) || []).map((e) => (e.key === effectId ? update(e) : e)),
+                    };
+                  });
+                }}
+                sliderFields={sliderFieldsModel ? get(sliderFieldsModel) : undefined}
+                onRemove={() => {
+                  updateScene(scenePath, (scene) => {
+                    return { ...scene, effects: (getSceneEffects(scene) || []).filter((e) => e.key !== effectId) };
+                  });
+                  return response(goBack());
+                }}
+              />
+            );
+          },
           { compare: isEqual }
         );
       }
@@ -720,7 +786,6 @@ function DashboardGradientDropdown({ item, slider }: { item: DashboardStateItem;
         theme: 'blue',
         iconAfter: <LucideIcon icon="Gauge" />,
       }}
-      onSliderFields={getSliderFieldUpdater(scenePath)}
       fieldPath={fieldPath}
       bounceAmount={bounceAmount ?? DefaultBounceAmount}
       bounceDuration={bounceDuration ?? DefaultBounceDuration}
@@ -964,7 +1029,52 @@ function EffectsScreen({
         header={<View height="$2" />}
         footer={
           <YStack gap="$4" padding="$4">
-            <NewEffectButton controlPath={controlPath} onScene={onScene} />
+            <NewEffectButton
+              getFollowupPath={(key) => `control/${controlPath.join(':')}:effect_${key}`}
+              onEffects={(updater) =>
+                onScene((s) => ({
+                  ...s,
+                  effects: updater(getSceneEffects(s)),
+                }))
+              }
+            />
+          </YStack>
+        }
+      />
+    </YStack>
+  );
+}
+
+function GlobalEffectsScreen({
+  effects,
+  onEffects,
+}: {
+  effects?: Effect[];
+  onEffects: (update: (m?: Effect[]) => Effect[]) => void;
+}) {
+  return (
+    <YStack flex={1}>
+      <StackScreen title={`Global Fx`} headerBackTitle={' '} />
+      <DraggableFlatList
+        style={{ height: '100%' }}
+        data={
+          effects?.map((effect) => ({
+            label: (
+              <Button marginHorizontal="$4" marginVertical="$1" disabled>
+                {effect.type}
+              </Button>
+            ),
+            key: effect.key,
+            onPress: navigate(`global_effects/${effect.key}`),
+          })) || []
+        }
+        onReorder={(keyOrder) => {
+          onEffects((s) => keyOrder.map((key) => effects?.find((e) => e.key === key)!));
+        }}
+        header={<View height="$2" />}
+        footer={
+          <YStack gap="$4" padding="$4">
+            <NewEffectButton getFollowupPath={(key) => `global_effects/${key}`} onEffects={onEffects} />
           </YStack>
         }
       />
@@ -985,11 +1095,11 @@ const EffectTypes: Readonly<{ label: string; key: Effect['type'] }[]> = [
 ] as const;
 
 function NewEffectButton({
-  controlPath,
-  onScene,
+  getFollowupPath,
+  onEffects,
 }: {
-  controlPath: string[];
-  onScene: (update: (m: Scene) => Scene) => void;
+  getFollowupPath: (key: string) => string;
+  onEffects: (update: (m?: Effect[]) => Effect[]) => void;
 }) {
   return (
     <BottomSheet
@@ -1006,10 +1116,10 @@ function NewEffectButton({
             key={key}
             onPress={() => {
               const newEffect = createBlankEffect(key);
-              onScene((scene) => {
-                return { ...scene, effects: [...(getSceneEffects(scene) || []), newEffect] };
+              onEffects((effects) => {
+                return [...(effects || []), newEffect];
               });
-              return response(navigate(`control/${controlPath.join(':')}:effect_${newEffect.key}`));
+              return response(navigate(getFollowupPath(newEffect.key)));
             }}
           >
             {label}
@@ -1021,31 +1131,24 @@ function NewEffectButton({
 }
 
 function EffectScreen({
-  scene,
-  onScene,
   controlPath,
-  effectId,
   sliderFields,
+  effect,
+  onEffect,
+  onRemove,
 }: {
-  scene?: Scene | null;
-  onScene: (update: (m: Scene) => Scene) => void;
-  controlPath: string[];
-  effectId: string;
+  controlPath?: string[];
   sliderFields?: SliderFields;
+  effect: Effect;
+  onEffect: (update: (e: Effect) => Effect) => void;
+  onRemove: () => void;
 }) {
-  if (!scene) return <SizableText>No Scene</SizableText>;
-  const effect = getSceneEffects(scene)?.find((e) => e.key === effectId);
-  let controls = null;
-  function onEffect(update: (e: Effect) => Effect) {
-    onScene((scene) => {
-      return { ...scene, effects: (getSceneEffects(scene) || []).map((e) => (e.key === effectId ? update(e) : e)) };
-    });
-  }
   const effectProps = {
     onEffect,
     sliderFields,
-    scenePath: controlPath.slice(0, -2),
+    scenePath: controlPath?.slice(0, -2),
   };
+  let controls = null;
   if (effect?.type === 'brighten') {
     controls = <EffectBrightenControls effect={effect} {...effectProps} />;
   }
@@ -1072,17 +1175,9 @@ function EffectScreen({
   }
   return (
     <YStack flex={1} padding="$4" gap="$4">
-      <StackScreen title={`Fx: ${getScreenTitle(scene, controlPath)}`} headerBackTitle={' '} />
+      {/* <StackScreen title={`Fx: ${getScreenTitle(scene, controlPath)}`} headerBackTitle={' '} /> */}
       {controls}
-      <Button
-        onPress={() => {
-          onScene((scene) => {
-            return { ...scene, effects: (getSceneEffects(scene) || []).filter((e) => e.key !== effectId) };
-          });
-          return response(goBack());
-        }}
-        icon={<LucideIcon icon="Trash" />}
-      >
+      <Button onPress={onRemove} icon={<LucideIcon icon="Trash" />}>
         Remove Effect
       </Button>
     </YStack>
@@ -1093,7 +1188,7 @@ type EffectControlsProps<EffectType> = {
   effect: EffectType;
   onEffect: (update: (e: Effect) => Effect) => void;
   sliderFields?: SliderFields;
-  scenePath: string[];
+  scenePath?: string[];
 };
 
 function EffectBrightenControls({ effect, onEffect, sliderFields, scenePath }: EffectControlsProps<BrightenEffect>) {
@@ -1525,18 +1620,16 @@ function GradientFieldDropdown({
   sliderField,
   triggerButtonProps,
   triggerButtonContent,
-  onSliderFields,
 }: {
   label: string;
-  sliderField: string;
+  sliderField?: string;
   triggerButtonProps: Parameters<typeof BottomSheetTriggerButton>[0];
   triggerButtonContent?: JSXElement;
-  onSliderFields: (update: (m: SliderFields) => SliderFields) => void;
   bounceAmount: number;
   maxBounceAmount: number;
   bounceDuration: number;
   smoothing: number;
-  scenePath: string[];
+  scenePath?: string[];
   fieldPath: string[];
   step?: number;
   min?: number;
@@ -1544,6 +1637,8 @@ function GradientFieldDropdown({
   value: number;
   onValueChange: (v: number) => void;
 }) {
+  const onSliderFields = scenePath ? getSliderFieldUpdater(scenePath) : undefined;
+
   return (
     <BottomSheet
       frameProps={{ padding: 0 }}
@@ -1562,79 +1657,87 @@ function GradientFieldDropdown({
             size={50}
             smoothing={smoothing}
           />
-          <Label>Smoothing</Label>
-          <SmoothSlider
-            value={smoothing}
-            step={0.01}
-            max={1}
-            size={50}
-            smoothing={0}
-            onValueChange={(v) => {
-              onSliderFields((fields) => ({
-                ...fields,
-                [sliderField]: { ...(fields[sliderField] || {}), smoothing: v },
-              }));
-            }}
-          />
+          {onSliderFields && sliderField ? (
+            <>
+              <Label>Smoothing</Label>
+              <SmoothSlider
+                value={smoothing}
+                step={0.01}
+                max={1}
+                size={50}
+                smoothing={0}
+                onValueChange={(v) => {
+                  onSliderFields((fields) => ({
+                    ...fields,
+                    [sliderField]: { ...(fields[sliderField] || {}), smoothing: v },
+                  }));
+                }}
+              />
+            </>
+          ) : null}
         </Section>
-        <Section title="Value Bounce">
-          <Label>Amount: {Math.round(bounceAmount * 10) / 10}</Label>
-          <SmoothSlider
-            value={bounceAmount}
-            step={step}
-            max={maxBounceAmount}
-            min={-maxBounceAmount}
-            size={50}
-            smoothing={0}
-            onValueChange={(v) => {
-              onSliderFields((fields) => ({
-                ...fields,
-                [sliderField]: { ...(fields[sliderField] || {}), bounceAmount: v },
-              }));
-            }}
-          />
-          <Label>Duration: {Math.round(bounceDuration / 100) / 10} sec</Label>
-          <SmoothSlider
-            value={bounceDuration}
-            max={6_000}
-            min={0}
-            step={10}
-            size={50}
-            smoothing={0}
-            onValueChange={(v) => {
-              onSliderFields((fields) => ({
-                ...fields,
-                [sliderField]: { ...(fields[sliderField] || {}), bounceDuration: v },
-              }));
-            }}
-          />
-          <Button
-            onPress={() => {
-              const fullBounceKey = [...scenePath, ...fieldPath].join(':');
-              bounceTimes[fullBounceKey] = Date.now();
-            }}
-          >
-            Trigger Bounce
-          </Button>
-        </Section>
-        <Section title="Dashboard">
-          <Button
-            onPress={async () => {
-              await addSliderToDashboard(scenePath, fieldPath);
-              return response(toast(`Added ${label} Slider to Dashboard`));
-            }}
-          >
-            Add Slider to Dashboard
-          </Button>
-          <Button
-            onPress={async () => {
-              await addBounceToDashboard(scenePath, fieldPath);
-              return response(toast(`Added ${label} Bounce Button to Dashboard`));
-            }}
-          >
-            Add Bounce to Dashboard
-          </Button>
-        </Section>
+        {onSliderFields && scenePath && sliderField ? (
+          <Section title="Value Bounce">
+            <Label>Amount: {Math.round(bounceAmount * 10) / 10}</Label>
+            <SmoothSlider
+              value={bounceAmount}
+              step={step}
+              max={maxBounceAmount}
+              min={-maxBounceAmount}
+              size={50}
+              smoothing={0}
+              onValueChange={(v) => {
+                onSliderFields((fields) => ({
+                  ...fields,
+                  [sliderField]: { ...(fields[sliderField] || {}), bounceAmount: v },
+                }));
+              }}
+            />
+            <Label>Duration: {Math.round(bounceDuration / 100) / 10} sec</Label>
+            <SmoothSlider
+              value={bounceDuration}
+              max={6_000}
+              min={0}
+              step={10}
+              size={50}
+              smoothing={0}
+              onValueChange={(v) => {
+                onSliderFields((fields) => ({
+                  ...fields,
+                  [sliderField]: { ...(fields[sliderField] || {}), bounceDuration: v },
+                }));
+              }}
+            />
+            <Button
+              onPress={() => {
+                const fullBounceKey = [...scenePath, ...fieldPath].join(':');
+                bounceTimes[fullBounceKey] = Date.now();
+              }}
+            >
+              Trigger Bounce
+            </Button>
+          </Section>
+        ) : null}
+        {scenePath ? (
+          <Section title="Dashboard">
+            <Button
+              onPress={async () => {
+                await addSliderToDashboard(scenePath, fieldPath);
+                return response(toast(`Added ${label} Slider to Dashboard`));
+              }}
+            >
+              Add Slider to Dashboard
+            </Button>
+            <Button
+              onPress={async () => {
+                await addBounceToDashboard(scenePath, fieldPath);
+                return response(toast(`Added ${label} Bounce Button to Dashboard`));
+              }}
+            >
+              Add Bounce to Dashboard
+            </Button>
+          </Section>
+        ) : null}
       </SheetScrollView>
     </BottomSheet>
   );
@@ -1658,12 +1761,12 @@ function GradientSlider({
   min?: number;
   max?: number;
   sliderFields?: SliderFields;
-  scenePath: string[];
+  scenePath?: string[];
   fieldPath: string[];
 }) {
-  const [rootScene, ...innerScenePath] = scenePath;
-  const sliderField = [...innerScenePath, ...fieldPath].join(':');
-  const fieldSettings = sliderFields?.[sliderField];
+  const innerScenePath = scenePath?.slice(1);
+  const sliderField = innerScenePath ? [...innerScenePath, ...fieldPath].join(':') : undefined;
+  const fieldSettings = sliderField ? sliderFields?.[sliderField] : {};
   const smoothing = fieldSettings?.smoothing == null ? 0.5 : fieldSettings.smoothing;
   const maxBounceAmount = Math.abs(max - min);
   const bounceAmount = fieldSettings?.bounceAmount == null ? 1 : fieldSettings.bounceAmount;
@@ -1673,7 +1776,6 @@ function GradientSlider({
       <GradientFieldDropdown
         label={label}
         sliderField={sliderField}
-        onSliderFields={getSliderFieldUpdater(scenePath)}
         triggerButtonProps={{
           paddingHorizontal: 0,
           size: '$2',
@@ -1753,7 +1855,7 @@ function SequenceScreen({ scene, onScene, controlPath, extraControls }: SceneScr
               Go Next
             </Button>
             <NewSequenceItem controlPath={controlPath} onScene={onScene} />
-            <EffectsButton controlPath={controlPath} />
+            <SceneEffectsButton controlPath={controlPath} />
             {extraControls}
             <GenericSceneControls controlPath={controlPath} scene={scene} onScene={onScene} />
             <ResetSceneButton controlPath={controlPath} scene={scene} onScene={onScene} />
@@ -1898,7 +2000,7 @@ function LayersScreen({ scene, onScene, controlPath, extraControls }: SceneScree
         footer={
           <YStack gap="$4" padding="$4">
             <NewLayerButton controlPath={controlPath} onScene={onScene} />
-            <EffectsButton controlPath={controlPath} />
+            <SceneEffectsButton controlPath={controlPath} />
             {extraControls}
             <GenericSceneControls controlPath={controlPath} scene={scene} onScene={onScene} />
             <ResetSceneButton controlPath={controlPath} scene={scene} onScene={onScene} />
@@ -1945,7 +2047,7 @@ function NewSequenceItem({
   );
 }
 
-function EffectsButton({ controlPath }: { controlPath: string[] }) {
+function SceneEffectsButton({ controlPath }: { controlPath: string[] }) {
   return (
     <Button onPress={navigate(`control/${controlPath.join(':')}:effects`)} icon={<LucideIcon icon="Sparkles" />}>
       Effects
@@ -2030,7 +2132,7 @@ function VideoScreen({ scene, onScene, controlPath, onGetMediaIndex, extraContro
         </Button>
         {/* <Text>{JSON.stringify(scene)}</Text> */}
         {/* <Text>{JSON.stringify(index?.files)}</Text> */}
-        <EffectsButton controlPath={controlPath} />
+        <SceneEffectsButton controlPath={controlPath} />
       </YStack>
       {extraControls}
       <Separator marginBottom="$4" />
