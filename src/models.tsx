@@ -29,7 +29,7 @@ import {
   XStack,
   YStack,
 } from '@rise-tools/kitchen-sink/server';
-import { createComponentDefinition, ref, response } from '@rise-tools/react';
+import { ActionModelState, createComponentDefinition, ref, response } from '@rise-tools/react';
 import { lookup, view } from '@rise-tools/server';
 import { randomUUID } from 'crypto';
 import { hslToHex } from './color';
@@ -106,7 +106,7 @@ export const models = {
       const state = get(mainState);
       if (!state) return <Spinner />;
       return (
-        <>
+        <ScrollView>
           <YStack gap="$4" padding="$4">
             <XStack gap="$1">
               <Button flex={1} onPress={navigate('control/live')}>
@@ -155,7 +155,7 @@ export const models = {
               Scenes
             </Button>
           </Section>
-        </>
+        </ScrollView>
       );
     },
     { compare: isEqual }
@@ -207,8 +207,17 @@ export const models = {
         const lib = get(libraryIndex);
         return (
           <ScrollView>
-            <YStack gap="$4" padding="$4">
-              {lib?.map((file) => <Button onPress={navigate(`browse_library/${file}`)}>{file}</Button>)}
+            <StackScreen title="Scene Library" />
+            <YStack padding="$4">
+              <ButtonGroup
+                items={
+                  lib?.map((file) => ({
+                    key: file,
+                    label: file,
+                    onPress: navigate(`browse_library/${file}`),
+                  })) || []
+                }
+              />
             </YStack>
           </ScrollView>
         );
@@ -248,6 +257,97 @@ export const models = {
         }
       };
       return <NewScenePicker behaviorLabel="Reset to" onScene={onScene} library={lib} media={media} />;
+    })
+  ),
+  reorder_sequence: lookup((scenePath) =>
+    view((get) => {
+      const sceneModel = sceneState.get(scenePath);
+      const scene = sceneModel ? get(sceneModel) : undefined;
+      if (!scene || scene.type !== 'sequence') return <Text>Not a sequence Scene</Text>;
+      return (
+        <>
+          <StackScreen title={`${getScreenTitle(scene, scenePath.split(':'))} Order`} headerBackTitle={' '} />
+          <DraggableFlatList
+            style={{ height: '100%' }}
+            header={<View height="$2" />}
+            footer={<View height="$4" />}
+            data={(scene.sequence || []).map((item) => ({
+              key: item.key,
+              label: (
+                <DraggableItem>
+                  {getScreenTitle(item.scene, [...scenePath.split(':'), `item_${item.key}`])}
+                </DraggableItem>
+              ),
+            }))}
+            onReorder={(newSequence) => {
+              updateScene(scenePath.split(':'), (scene) => {
+                if (scene.type !== 'sequence') return scene;
+                return { ...scene, sequence: newSequence.map((key) => scene.sequence.find((l) => l.key === key)!) };
+              });
+            }}
+          />
+        </>
+      );
+    })
+  ),
+  reorder_layers: lookup((scenePath) =>
+    view((get) => {
+      const sceneModel = sceneState.get(scenePath);
+      const scene = sceneModel ? get(sceneModel) : undefined;
+      if (!scene || scene.type !== 'layers') return <Text>Not a Layers Scene</Text>;
+      return (
+        <>
+          <StackScreen title={`${getScreenTitle(scene, scenePath.split(':'))} Order`} headerBackTitle={' '} />
+          <DraggableFlatList
+            style={{ height: '100%' }}
+            header={<View height="$2" />}
+            footer={<View height="$4" />}
+            data={(scene.layers || []).map((layer) => ({
+              key: layer.key,
+              label: (
+                <DraggableItem>
+                  {getScreenTitle(layer.scene, [...scenePath.split(':'), `layer_${layer.key}`])}
+                </DraggableItem>
+              ),
+            }))}
+            onReorder={(newLayers) => {
+              updateScene(scenePath.split(':'), (scene) => {
+                if (scene.type !== 'layers') return scene;
+                return { ...scene, layers: newLayers.map((key) => scene.layers.find((l) => l.key === key)!) };
+              });
+            }}
+          />
+        </>
+      );
+    })
+  ),
+  reorder_effects: lookup((scenePath) =>
+    view((get) => {
+      const sceneModel = sceneState.get(scenePath);
+      const scene = sceneModel ? get(sceneModel) : undefined;
+      if (!scene) return <Text>Not a Scene</Text>;
+      return (
+        <>
+          <StackScreen title={`Effects Order`} headerBackTitle={' '} />
+          <DraggableFlatList
+            style={{ height: '100%' }}
+            header={<View height="$2" />}
+            footer={<View height="$4" />}
+            data={(getSceneEffects(scene) || []).map((effect) => ({
+              key: effect.key,
+              label: <DraggableItem>{effect.type}</DraggableItem>,
+            }))}
+            onReorder={(newEffectOrder) => {
+              updateScene(scenePath.split(':'), (scene) => {
+                return {
+                  ...scene,
+                  effects: newEffectOrder.map((key) => getSceneEffects(scene)!.find((l) => l.key === key)!),
+                };
+              });
+            }}
+          />
+        </>
+      );
     })
   ),
   add_scene: lookup((scenePath) =>
@@ -507,18 +607,34 @@ function LibraryItemScreen({ item }: { item: string }) {
   );
 }
 
+function DraggableItem({ children }: { children?: JSXElement }) {
+  return (
+    <View
+      marginHorizontal="$4"
+      paddingHorizontal="$4"
+      paddingVertical="$3"
+      backgroundColor="$color3"
+      borderRadius="$4"
+      marginVertical="$1"
+    >
+      <Text>{children}</Text>
+    </View>
+  );
+}
+
 function ButtonGroup({
   items,
-  Button,
+  ...props
 }: {
-  items?: { key: string; label: string; onPress: () => void }[];
-  Button: (props: Parameters<typeof BottomSheetCloseButton>[0]) => JSXElement;
+  items?: { key: string; label: string; onPress: Parameters<typeof BottomSheetCloseButton>[0]['onPress'] }[];
+  Button?: (props: Parameters<typeof BottomSheetCloseButton>[0]) => JSXElement;
 }) {
+  const ButtonComponent = props.Button || Button;
   if (!items) return null;
   return (
     <XStack gap="$1" flexWrap="wrap" jc="center">
       {items.map((item) => (
-        <Button
+        <ButtonComponent
           size="$3"
           marginBottom="$1"
           key={item.key}
@@ -530,7 +646,7 @@ function ButtonGroup({
           minWidth={240}
         >
           {item.label}
-        </Button>
+        </ButtonComponent>
       ))}
     </XStack>
   );
@@ -606,12 +722,17 @@ function BrowseMediaScreen({
 }) {
   return (
     <ScrollView>
+      <StackScreen title="Media Library" />
       <YStack gap="$1" padding="$4">
-        {media?.files?.map((file) => (
-          <Button size="$3" onPress={navigate(`browse_videos/${file.id}`)}>
-            {file.title}
-          </Button>
-        ))}
+        <ButtonGroup
+          items={
+            media?.files?.map((file) => ({
+              key: file.id,
+              label: file.title,
+              onPress: navigate(`browse_videos/${file.id}`),
+            })) || []
+          }
+        />
       </YStack>
       <Section title="Import">
         <RiseForm
@@ -918,14 +1039,6 @@ const SceneTypes = [
   { key: 'sequence', label: 'Sequence' },
 ] as const;
 
-type ScreenProps = {
-  scene: Scene;
-  onScene: (update: (s: Scene) => Scene) => void;
-  controlPath: string[];
-  extraControls?: any;
-  onGetMediaIndex: () => MediaIndex | undefined;
-};
-
 function SceneScreen({
   scene,
   onScene,
@@ -1004,44 +1117,37 @@ function EffectsScreen({
 }) {
   if (!scene) return <SizableText>No Scene</SizableText>;
   return (
-    <YStack flex={1}>
+    <ScrollView>
       <StackScreen title={`Fx: ${getScreenTitle(scene, controlPath)}`} headerBackTitle={' '} />
-      <DraggableFlatList
-        style={{ height: '100%' }}
-        data={
-          getSceneEffects(scene)?.map((effect) => ({
-            label: (
-              <Button marginHorizontal="$4" marginVertical="$1" disabled>
-                {effect.type}
-              </Button>
-            ),
-            key: effect.key,
-            onPress: navigate(`control/${controlPath.join(':')}:effect_${effect.key}`),
-          })) || []
-        }
-        // onItemPress={(key) => {}}
-        onReorder={(keyOrder) => {
-          onScene((s) => ({
-            ...s,
-            effects: keyOrder.map((key) => getSceneEffects(scene)?.find((e) => e.key === key)!),
-          }));
-        }}
-        header={<View height="$2" />}
-        footer={
-          <YStack gap="$4" padding="$4">
-            <NewEffectButton
-              getFollowupPath={(key) => `control/${controlPath.join(':')}:effect_${key}`}
-              onEffects={(updater) =>
-                onScene((s) => ({
-                  ...s,
-                  effects: updater(getSceneEffects(s)),
-                }))
-              }
-            />
-          </YStack>
-        }
-      />
-    </YStack>
+      {getSceneEffects(scene)?.map((effect) => (
+        <Button
+          marginHorizontal="$4"
+          marginVertical="$1"
+          onPress={navigate(`control/${controlPath.join(':')}:effect_${effect.key}`)}
+          key={effect.key}
+        >
+          {effect.type}
+        </Button>
+      ))}
+      <XStack gap="$4" padding="$4">
+        <NewEffectButton
+          getFollowupPath={(key) => `control/${controlPath.join(':')}:effect_${key}`}
+          onEffects={(updater) =>
+            onScene((s) => ({
+              ...s,
+              effects: updater(getSceneEffects(s)),
+            }))
+          }
+        />
+        <Button
+          flex={1}
+          onPress={navigate(`reorder_effects/${controlPath.slice(0, -1).join(':')}`)}
+          icon={<LucideIcon icon="ArrowUpDown" />}
+        >
+          Effect Order
+        </Button>
+      </XStack>
+    </ScrollView>
   );
 }
 
@@ -1053,32 +1159,23 @@ function GlobalEffectsScreen({
   onEffects: (update: (m?: Effect[]) => Effect[]) => void;
 }) {
   return (
-    <YStack flex={1}>
+    <ScrollView>
       <StackScreen title={`Global Fx`} headerBackTitle={' '} />
-      <DraggableFlatList
-        style={{ height: '100%' }}
-        data={
-          effects?.map((effect) => ({
-            label: (
-              <Button marginHorizontal="$4" marginVertical="$1" disabled>
-                {effect.type}
-              </Button>
-            ),
-            key: effect.key,
-            onPress: navigate(`global_effects/${effect.key}`),
-          })) || []
-        }
-        onReorder={(keyOrder) => {
-          onEffects((s) => keyOrder.map((key) => effects?.find((e) => e.key === key)!));
-        }}
-        header={<View height="$2" />}
-        footer={
-          <YStack gap="$4" padding="$4">
-            <NewEffectButton getFollowupPath={(key) => `global_effects/${key}`} onEffects={onEffects} />
-          </YStack>
-        }
-      />
-    </YStack>
+      {effects?.map((effect) => (
+        <Button
+          key={effect.key}
+          onPress={navigate(`global_effects/${effect.key}`)}
+          marginHorizontal="$4"
+          marginVertical="$1"
+          disabled
+        >
+          {effect.type}
+        </Button>
+      ))}
+      <YStack gap="$4" padding="$4">
+        <NewEffectButton getFollowupPath={(key) => `global_effects/${key}`} onEffects={onEffects} />
+      </YStack>
+    </ScrollView>
   );
 }
 
@@ -1102,31 +1199,33 @@ function NewEffectButton({
   onEffects: (update: (m?: Effect[]) => Effect[]) => void;
 }) {
   return (
-    <BottomSheet
-      trigger={
-        <YStack>
-          <Separator marginVertical="$4" />
-          <BottomSheetTriggerButton icon={<LucideIcon icon="Sparkles" />}>New Effect</BottomSheetTriggerButton>
-        </YStack>
-      }
-    >
-      <YStack gap="$3">
-        {EffectTypes.map(({ key, label }) => (
-          <BottomSheetCloseButton
-            key={key}
-            onPress={() => {
-              const newEffect = createBlankEffect(key);
-              onEffects((effects) => {
-                return [...(effects || []), newEffect];
-              });
-              return response(navigate(getFollowupPath(newEffect.key)));
-            }}
-          >
-            {label}
-          </BottomSheetCloseButton>
-        ))}
-      </YStack>
-    </BottomSheet>
+    <View flex={1}>
+      <BottomSheet
+        frameProps={{ padding: 0 }}
+        trigger={
+          <BottomSheetTriggerButton flex={1} icon={<LucideIcon icon="Sparkles" />}>
+            Add Effect
+          </BottomSheetTriggerButton>
+        }
+      >
+        <Section title="Add Effect">
+          <ButtonGroup
+            Button={BottomSheetCloseButton}
+            items={EffectTypes.map(({ key, label }) => ({
+              key,
+              label,
+              onPress: () => {
+                const newEffect = createBlankEffect(key);
+                onEffects((effects) => {
+                  return [...(effects || []), newEffect];
+                });
+                return response(navigate(getFollowupPath(newEffect.key)));
+              },
+            }))}
+          />
+        </Section>
+      </BottomSheet>
+    </View>
   );
 }
 
@@ -1825,44 +1924,48 @@ function SequenceScreen({ scene, onScene, controlPath, extraControls }: SceneScr
     return undefined;
   }
   return (
-    <YStack>
-      <DraggableFlatList
-        style={{ height: '100%' }}
-        data={
-          scene?.sequence?.map((item) => ({
-            label: (
-              <Button marginHorizontal="$4" marginVertical="$1" backgroundColor={bgColorOfItem(item)} disabled>
-                {getScreenTitle(item.scene, [...controlPath, `item_${item.key}`])}
-              </Button>
-            ),
-            key: item.key,
-            // onPress: navigate(`control/${controlPath.join(':')}:item_${item.key}`),
-          })) || []
-        }
-        onReorder={(keyOrder) => {
-          onScene((s) => ({ ...s, sequence: keyOrder.map((key) => scene.sequence?.find((e) => e.key === key)!) }));
-        }}
-        onItemPress={(key) => response(navigate(`control/${controlPath.join(':')}:item_${key}`))}
-        header={<View height="$2" />}
-        footer={
-          <YStack gap="$4" padding="$4">
-            <Button
-              icon={<LucideIcon icon="Play" />}
-              onPress={() => {
-                goNext(controlPath);
-              }}
-            >
-              Go Next
-            </Button>
-            <NewSequenceItem controlPath={controlPath} onScene={onScene} />
-            <SceneEffectsButton controlPath={controlPath} />
-            {extraControls}
-            <GenericSceneControls controlPath={controlPath} scene={scene} onScene={onScene} />
-            <ResetSceneButton controlPath={controlPath} scene={scene} onScene={onScene} />
-          </YStack>
-        }
-      />
-    </YStack>
+    <ScrollView>
+      {(
+        scene?.sequence?.map((item) => ({
+          label: getScreenTitle(item.scene, [...controlPath, `item_${item.key}`]),
+          bg: bgColorOfItem(item),
+          key: item.key,
+          // onPress: navigate(`control/${controlPath.join(':')}:item_${item.key}`),
+        })) || []
+      ).map((item) => (
+        <Button
+          marginHorizontal="$4"
+          marginVertical="$1"
+          backgroundColor={item.bg}
+          onPress={() => {
+            return response(navigate(`control/${controlPath.join(':')}:item_${item.key}`));
+          }}
+        >
+          {item.label}
+        </Button>
+      ))}
+      <YStack gap="$4" padding="$4">
+        <Button
+          icon={<LucideIcon icon="Play" />}
+          onPress={() => {
+            goNext(controlPath);
+          }}
+        >
+          Go Next
+        </Button>
+        <NewSequenceItem controlPath={controlPath} onScene={onScene} />
+        <SceneEffectsButton controlPath={controlPath} />
+        <Button
+          onPress={navigate(`reorder_sequence/${controlPath.join(':')}`)}
+          icon={<LucideIcon icon="ArrowUpDown" />}
+        >
+          Reorder Sequence
+        </Button>
+        {extraControls}
+        <GenericSceneControls controlPath={controlPath} scene={scene} onScene={onScene} />
+        <ResetSceneButton controlPath={controlPath} scene={scene} onScene={onScene} />
+      </YStack>
+    </ScrollView>
   );
 }
 
@@ -1879,20 +1982,20 @@ function GenericSceneControls({
   const labelId = `label-${controlPath.join(':')}`;
   return (
     <>
-      {/* <BottomSheet
+      <BottomSheet
         trigger={<BottomSheetTriggerButton icon={<LucideIcon icon="Tag" />}>Rename Scene</BottomSheetTriggerButton>}
-      > */}
-      <YStack flex={1}>
-        <RiseForm
-          onSubmit={(fields) => {
-            onScene((s) => ({ ...s, label: fields[labelId] }));
-          }}
-        >
-          <InputField label="Scene Name" id={labelId} defaultValue={scene.label} />
-          <SubmitButton>Save Label</SubmitButton>
-        </RiseForm>
-      </YStack>
-      {/* </BottomSheet> */}
+      >
+        <YStack flex={1}>
+          <RiseForm
+            onSubmit={(fields) => {
+              onScene((s) => ({ ...s, label: fields[labelId] }));
+            }}
+          >
+            <InputField label="Scene Name" id={labelId} defaultValue={scene.label} />
+            <SubmitButton>Save Label</SubmitButton>
+          </RiseForm>
+        </YStack>
+      </BottomSheet>
       <Button
         icon={<LucideIcon icon="Download" />}
         onPress={async () => {
@@ -1970,44 +2073,32 @@ function iconOfBlendMode(blendMode: 'add' | 'mix' | 'mask') {
 
 function LayersScreen({ scene, onScene, controlPath, extraControls }: SceneScreenProps<LayersScene>) {
   return (
-    <YStack>
-      <DraggableFlatList
-        style={{ height: '100%' }}
-        data={
-          scene.layers?.map((layer) => {
-            const isBaseLayer = layer === scene.layers?.at(-1);
-            return {
-              label: (
-                <Button
-                  marginHorizontal="$4"
-                  marginVertical="$1"
-                  disabled
-                  icon={isBaseLayer ? null : iconOfBlendMode(layer.blendMode)}
-                >
-                  {getScreenTitle(layer.scene, [...controlPath, `layer_${layer.key}`])}
-                </Button>
-              ),
-              key: layer.key,
-              // onPress: navigate(`control/${controlPath.join(':')}:layer_${layer.key}`),
-            };
-          }) || []
-        }
-        onReorder={(keyOrder) => {
-          onScene((s) => ({ ...s, layers: keyOrder.map((key) => scene.layers?.find((e) => e.key === key)!) }));
-        }}
-        onItemPress={(key) => response(navigate(`control/${controlPath.join(':')}:layer_${key}`))}
-        header={<View height="$2" />}
-        footer={
-          <YStack gap="$4" padding="$4">
-            <NewLayerButton controlPath={controlPath} onScene={onScene} />
-            <SceneEffectsButton controlPath={controlPath} />
-            {extraControls}
-            <GenericSceneControls controlPath={controlPath} scene={scene} onScene={onScene} />
-            <ResetSceneButton controlPath={controlPath} scene={scene} onScene={onScene} />
-          </YStack>
-        }
-      />
-    </YStack>
+    <ScrollView>
+      {scene.layers?.map((layer) => {
+        const isBaseLayer = layer === scene.layers?.at(-1);
+        return (
+          <Button
+            marginHorizontal="$4"
+            marginVertical="$1"
+            key={layer.key}
+            icon={isBaseLayer ? null : iconOfBlendMode(layer.blendMode)}
+            onPress={navigate(`control/${controlPath.join(':')}:layer_${layer.key}`)}
+          >
+            {getScreenTitle(layer.scene, [...controlPath, `layer_${layer.key}`])}
+          </Button>
+        );
+      })}
+      <YStack gap="$4" padding="$4">
+        <NewLayerButton controlPath={controlPath} onScene={onScene} />
+        <Button onPress={navigate(`reorder_layers/${controlPath.join(':')}`)} icon={<LucideIcon icon="ArrowUpDown" />}>
+          Sort Layers
+        </Button>
+        <SceneEffectsButton controlPath={controlPath} />
+        {extraControls}
+        <GenericSceneControls controlPath={controlPath} scene={scene} onScene={onScene} />
+        <ResetSceneButton controlPath={controlPath} scene={scene} onScene={onScene} />
+      </YStack>
+    </ScrollView>
   );
 }
 
@@ -2066,6 +2157,7 @@ function ResetSceneButton({
 }) {
   return (
     <BottomSheet
+      frameProps={{ padding: 0 }}
       trigger={
         <BottomSheetTriggerButton icon={<LucideIcon icon="UndoDot" />} theme="red">
           Reset Scene
@@ -2099,7 +2191,7 @@ function VideoScreen({ scene, onScene, controlPath, onGetMediaIndex, extraContro
                 value={scene?.track}
                 options={trackOptions}
                 onSelect={(key) => {
-                  onScene(() => ({
+                  onScene((scene) => ({
                     ...scene,
                     track: key,
                     label: index?.files.find((f) => f.id === key)?.title || '?',
@@ -2115,7 +2207,7 @@ function VideoScreen({ scene, onScene, controlPath, onGetMediaIndex, extraContro
               value={scene?.track}
               options={trackOptions}
               onSelect={(key) => {
-                onScene(() => ({ ...scene, track: key, label: index.files.find((f) => f.id === key)?.title }));
+                onScene((scene) => ({ ...scene, track: key, label: index.files.find((f) => f.id === key)?.title }));
               }}
             />
           )
@@ -2161,6 +2253,7 @@ function SelectDropdown<Options extends Readonly<{ label: string; key: string }[
 }) {
   return (
     <BottomSheet
+      frameProps={{ padding: 0 }}
       trigger={
         <BottomSheetTriggerButton iconAfter={<LucideIcon icon="ChevronDown" />} {...triggerProps}>
           {triggerLabel ?? options.find((o) => o.key === value)?.label ?? emptyLabel}
@@ -2168,13 +2261,14 @@ function SelectDropdown<Options extends Readonly<{ label: string; key: string }[
       }
     >
       <SheetScrollView>
-        <YStack>
+        <YStack margin="$3">
           {options.map((option) => (
             <BottomSheetCloseButton
               key={option.key}
               onPress={() => {
                 onSelect(option.key);
               }}
+              chromeless
               iconAfter={option.key === value ? <LucideIcon icon="Check" /> : null}
             >
               {option.label}

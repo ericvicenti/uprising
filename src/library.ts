@@ -19,10 +19,12 @@ mkdirSync(libraryDeletedPath, { recursive: true });
 
 export const libraryIndex = query(async () => {
   const libraryItems = await readdir(libraryPath);
-  const library = libraryItems.map((item) => {
-    return item.split('.json')[0];
-  });
-  return library.filter((item) => item !== 'deleted');
+  const library = libraryItems
+    .map((item) => {
+      return item.match(/(.*)\.json/)?.[1];
+    })
+    .filter((item) => !!item) as string[];
+  return library;
 });
 
 export async function writeLibraryItem(controlPath: string[], scene: Scene) {
