@@ -25,6 +25,8 @@ import {
   SwitchThumb,
   Text,
   toast,
+  ToggleGroup,
+  ToggleGroupItem,
   View,
   XStack,
   YStack,
@@ -77,6 +79,7 @@ import {
   DarkenEffect,
   Dashboard,
   DashboardItem,
+  DefaultTransition,
   DesaturateEffect,
   Effect,
   HueShiftEffect,
@@ -94,7 +97,7 @@ import {
   TransitionState,
   VideoScene,
 } from './state-schema';
-import { DefaultBounceAmount, DefaultBounceDuration, DefaultSmoothing } from './constants';
+import { DefaultBounceAmount, DefaultBounceDuration, DefaultSmoothing, DefaultTransitionDuration } from './constants';
 import { compare } from 'fast-json-patch';
 // import { isEqual } from 'lodash';
 type JSXElement = ReturnType<ReturnType<typeof createComponentDefinition>>;
@@ -1981,6 +1984,7 @@ function SequenceScreen({ scene, onScene, controlPath, extraControls }: SceneScr
         >
           Go Next
         </Button>
+        <SetTransitionButton scene={scene} onScene={onScene} />
         <NewSequenceItem controlPath={controlPath} onScene={onScene} />
         <SceneEffectsButton controlPath={controlPath} />
         <Button
@@ -1994,6 +1998,87 @@ function SequenceScreen({ scene, onScene, controlPath, extraControls }: SceneScr
         <ResetSceneButton controlPath={controlPath} scene={scene} onScene={onScene} />
       </YStack>
     </ScrollView>
+  );
+}
+
+function SetTransitionButton({
+  scene,
+  onScene,
+}: {
+  scene: SequenceScene;
+  onScene: (update: (m: Scene) => Scene) => void;
+}) {
+  return (
+    <BottomSheet
+      trigger={
+        <BottomSheetTriggerButton icon={<LucideIcon icon="Presentation" />}>Set Transition</BottomSheetTriggerButton>
+      }
+    >
+      <EditTransitionForm
+        transition={scene.transition ?? DefaultTransition}
+        onTransition={(updater) =>
+          onScene((s) => {
+            if (s.type !== 'sequence') return s;
+            return { ...s, transition: updater(s.transition ?? DefaultTransition) };
+          })
+        }
+      />
+    </BottomSheet>
+  );
+}
+
+function EditTransitionForm({
+  transition,
+  onTransition,
+}: {
+  transition: Transition;
+  onTransition: (updater: (t: Transition) => Transition) => void;
+}) {
+  function setMode(mode: Transition['mode']) {
+    onTransition((transition) => {
+      return { ...transition, mode };
+    });
+  }
+  return (
+    <>
+      <Label>Transition Mode</Label>
+      <Group orientation="horizontal" gap="$4">
+        <GroupItem>
+          <Button
+            onPress={() => {
+              setMode('mix');
+            }}
+            {...(transition.mode === 'mix' ? { backgroundColor: '$color7', icon: <LucideIcon icon="Check" /> } : {})}
+          >
+            Mix
+          </Button>
+        </GroupItem>
+        <GroupItem>
+          <Button
+            onPress={() => {
+              setMode('add');
+            }}
+            {...(transition.mode === 'add' ? { backgroundColor: '$color7', icon: <LucideIcon icon="Check" /> } : {})}
+          >
+            Add
+          </Button>
+        </GroupItem>
+      </Group>
+      <Label>Duration: {Math.floor((transition?.duration ?? DefaultTransitionDuration) / 100) / 10} sec</Label>
+      <SmoothSlider
+        value={transition?.duration ?? DefaultTransition.duration}
+        onValueChange={(v) =>
+          onTransition((t) => {
+            return { ...t, duration: v };
+          })
+        }
+        smoothing={0}
+        size={50}
+        min={0}
+        step={10}
+        max={15000}
+      />
+    </>
   );
 }
 
@@ -2323,19 +2408,12 @@ function EditTransition({
   onTransition: (update: (t: Transition) => Transition) => void;
 }) {
   return (
-    <BottomSheet trigger={<BottomSheetTriggerButton>Edit Transition</BottomSheetTriggerButton>}>
-      <YStack>
-        <Label>Duration - {Math.round(transition.duration / 100) / 10} sec</Label>
-        <SmoothSlider
-          value={transition.duration}
-          min={0}
-          step={10}
-          max={15_000}
-          smoothing={0.5}
-          onValueChange={(v) => onTransition((t) => ({ ...t, duration: v }))}
-          size={50}
-        />
-      </YStack>
+    <BottomSheet
+      trigger={
+        <BottomSheetTriggerButton icon={<LucideIcon icon="Presentation" />}>Set Transition</BottomSheetTriggerButton>
+      }
+    >
+      <EditTransitionForm transition={transition ?? DefaultTransition} onTransition={onTransition} />
     </BottomSheet>
   );
 }

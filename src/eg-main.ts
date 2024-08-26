@@ -23,6 +23,7 @@ import {
   ColorScene,
   ContrastEffect,
   DarkenEffect,
+  DefaultTransition,
   DesaturateEffect,
   Effect,
   Effects,
@@ -267,7 +268,7 @@ function sequenceFrame(scene: SequenceScene, ctx: StateContext, controlPath: str
   if (!frame) {
     return blackFrame;
   }
-  if (transitionSpec && nextActiveKey && transitionStartTime && transitionEndTime) {
+  if (nextActiveKey && transitionStartTime && transitionEndTime) {
     // transition in progress
     const progress = (now - transitionStartTime) / duration;
     const nextItem = scene.sequence.find((item) => item.key === nextActiveKey);
@@ -278,7 +279,7 @@ function sequenceFrame(scene: SequenceScene, ctx: StateContext, controlPath: str
       if (progress >= 1) {
         frame = nextFrame;
       } else {
-        const transitionFrame = transition(egInfo, frame, nextFrame, transitionSpec, progress);
+        const transitionFrame = transition(egInfo, frame, nextFrame, transitionSpec ?? DefaultTransition, progress);
         frame = transitionFrame;
       }
     }

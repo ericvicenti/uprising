@@ -2,6 +2,7 @@ import exp from 'constants';
 import { z } from 'zod';
 
 import { EGVideo } from './eg-video-playback';
+import { DefaultTransitionDuration } from './constants';
 
 export type StateContext = {
   time: number;
@@ -198,8 +199,16 @@ const maskTransitionSchema = z.object({
 });
 export type MaskTransition = z.infer<typeof maskTransitionSchema>;
 
-const transitionSchema = z.discriminatedUnion('type', [fadeTransitionSchema, maskTransitionSchema]);
+// todo: mask transitions
+// const transitionSchema = z.discriminatedUnion('type', [fadeTransitionSchema, maskTransitionSchema]);
+const transitionSchema = fadeTransitionSchema;
 export type Transition = z.infer<typeof transitionSchema>;
+
+export const DefaultTransition: Transition = {
+  type: 'fade',
+  mode: 'mix',
+  duration: DefaultTransitionDuration,
+};
 
 export type SequenceScene = {
   type: 'sequence';
