@@ -31,6 +31,8 @@ import {
 } from '@rise-tools/kitchen-sink/server';
 import { ActionModelState, createComponentDefinition, ref, response } from '@rise-tools/react';
 import { lookup, view } from '@rise-tools/server';
+import { createComponentDefinition, ref, response } from '@rise-tools/react';
+import { lookup, ValueModel, view } from '@rise-tools/server';
 import { randomUUID } from 'crypto';
 import { hslToHex } from './color';
 import { getSequenceActiveItem } from './eg-main';
@@ -93,6 +95,7 @@ import {
   VideoScene,
 } from './state-schema';
 import { DefaultBounceAmount, DefaultBounceDuration, DefaultSmoothing } from './constants';
+import { compare } from 'fast-json-patch';
 // import { isEqual } from 'lodash';
 type JSXElement = ReturnType<ReturnType<typeof createComponentDefinition>>;
 
@@ -100,69 +103,67 @@ function isEqual(a: any, b: any) {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
+function compareView<V>(loader: (get: <V>(model: ValueModel<V>) => V | undefined) => V) {
+  return view<V>(loader, { compare: isEqual });
+}
+
 export const models = {
-  home: view(
-    (get) => {
-      const state = get(mainState);
-      if (!state) return <Spinner />;
-      return (
-        <ScrollView>
-          <YStack gap="$4" padding="$4">
-            <XStack gap="$1">
-              <Button flex={1} onPress={navigate('control/live')}>
-                Live: {getScreenTitle(state.liveScene, ['live'])}
-              </Button>
-              <Button chromeless icon={<LucideIcon icon="LayoutDashboard" />} onPress={navigate('dashboard/live')} />
-            </XStack>
-            <XStack gap="$1">
-              <Button flex={1} onPress={navigate('control/ready')}>
-                Ready: {getScreenTitle(state.readyScene, ['ready'])}
-              </Button>
-              <Button chromeless icon={<LucideIcon icon="LayoutDashboard" />} onPress={navigate('dashboard/ready')} />
-            </XStack>
-            <Button
-              onPress={() => {
-                startAutoTransition();
-              }}
-              disabled={state.transitionState.manual !== null}
-              icon={<LucideIcon icon="PlayCircle" />}
-            >
-              Start Transition
+  home: compareView((get) => {
+    const state = get(mainState);
+    if (!state) return <Spinner />;
+    return (
+      <ScrollView>
+        <YStack gap="$4" padding="$4">
+          <XStack gap="$1">
+            <Button flex={1} onPress={navigate('control/live')}>
+              Live: {getScreenTitle(state.liveScene, ['live'])}
             </Button>
-            <EditTransition
-              transition={state.transition}
-              onTransition={(update) =>
-                mainStateUpdate((state) => ({ ...state, transition: update(state.transition) }))
-              }
-            />
-            <AutoTransitionProgress transitionState={state.transitionState} transition={state.transition} />
-            {/* <YStack width="100%" aspectRatio={1} backgroundColor="red">
+            <Button chromeless icon={<LucideIcon icon="LayoutDashboard" />} onPress={navigate('dashboard/live')} />
+          </XStack>
+          <XStack gap="$1">
+            <Button flex={1} onPress={navigate('control/ready')}>
+              Ready: {getScreenTitle(state.readyScene, ['ready'])}
+            </Button>
+            <Button chromeless icon={<LucideIcon icon="LayoutDashboard" />} onPress={navigate('dashboard/ready')} />
+          </XStack>
+          <Button
+            onPress={() => {
+              startAutoTransition();
+            }}
+            disabled={state.transitionState.manual !== null}
+            icon={<LucideIcon icon="PlayCircle" />}
+          >
+            Start Transition
+          </Button>
+          <EditTransition
+            transition={state.transition}
+            onTransition={(update) => mainStateUpdate((state) => ({ ...state, transition: update(state.transition) }))}
+          />
+          <AutoTransitionProgress transitionState={state.transitionState} transition={state.transition} />
+          {/* <YStack width="100%" aspectRatio={1} backgroundColor="red">
         <WebView
           style={{ flex: 1, backgroundColor: 'white', pointerEvents: 'none' }}
           source={{ uri: 'http://localhost:3000/eg-live' }}
         />
       </YStack> */}
-            {/* <Text>{JSON.stringify(get(mainState))}</Text> */}
-            <Button onPress={navigate(`global_effects`)} icon={<LucideIcon icon="Sparkles" />}>
-              Global Effects
-            </Button>
-          </YStack>
-          <Section title="Library">
-            <Button icon={<LucideIcon icon="Library" />} onPress={navigate('browse_videos')}>
-              Media
-            </Button>
-            <Button icon={<LucideIcon icon="Library" />} onPress={navigate('browse_library')}>
-              Scenes
-            </Button>
-          </Section>
-        </ScrollView>
-      );
-    },
-    { compare: isEqual }
-  ),
+          <Button onPress={navigate(`global_effects`)} icon={<LucideIcon icon="Sparkles" />}>
+            Global Effects
+          </Button>
+        </YStack>
+        <Section title="Library">
+          <Button icon={<LucideIcon icon="Library" />} onPress={navigate('browse_videos')}>
+            Media
+          </Button>
+          <Button icon={<LucideIcon icon="Library" />} onPress={navigate('browse_library')}>
+            Scenes
+          </Button>
+        </Section>
+      </ScrollView>
+    );
+  }),
   dashboard: lookup((dashboardKey) => {
     const dashboard = dashboards.get(dashboardKey);
-    return view((get) => {
+    return compareView((get) => {
       const dashboardState = dashboard ? get(dashboard) : undefined;
       if (dashboardKey !== 'live' && dashboardKey !== 'ready') return <Text>Unknown Dashboard</Text>;
       return <DashboardScreen dashboardKey={dashboardKey} dashboard={dashboardState} />;
@@ -170,7 +171,7 @@ export const models = {
   }),
   dashboard_edit: lookup((dashboardKey) => {
     const dashboard = dashboards.get(dashboardKey);
-    return view((get) => {
+    return compareView((get) => {
       const dashboardState = dashboard ? get(dashboard) : undefined;
       if (dashboardKey !== 'live' && dashboardKey !== 'ready') return <Text>Unknown Dashboard</Text>;
       return <EditDashboardScreen dashboardKey={dashboardKey} dashboard={dashboardState} />;
@@ -178,7 +179,7 @@ export const models = {
   }),
   dashboard_edit_item: lookup((dashboardKey) => {
     return lookup((itemKey) => {
-      return view((get) => {
+      return compareView((get) => {
         const dashboard = dashboards.get(dashboardKey);
         const dashboardState = dashboard ? get(dashboard) : undefined;
         const item = dashboardState?.items?.find((i) => i.key === itemKey);
@@ -189,44 +190,38 @@ export const models = {
     });
   }),
   browse_videos: lookup((fileId) =>
-    view(
-      (get) => {
-        const media = get(mediaIndex);
-        if (fileId !== '') return <MediaFileScreen file={media?.files.find((file) => file.id === fileId)} />;
-        const importing = get(importState);
+    compareView((get) => {
+      const media = get(mediaIndex);
+      if (fileId !== '') return <MediaFileScreen file={media?.files.find((file) => file.id === fileId)} />;
+      const importing = get(importState);
 
-        return <BrowseMediaScreen media={media} importing={importing} />;
-      },
-      { compare: isEqual }
-    )
+      return <BrowseMediaScreen media={media} importing={importing} />;
+    })
   ),
   browse_library: lookup((libraryId) =>
-    view(
-      (get) => {
-        if (libraryId !== '') return <LibraryItemScreen item={libraryId} />;
-        const lib = get(libraryIndex);
-        return (
-          <ScrollView>
-            <StackScreen title="Scene Library" />
-            <YStack padding="$4">
-              <ButtonGroup
-                items={
-                  lib?.map((file) => ({
-                    key: file,
-                    label: file,
-                    onPress: navigate(`browse_library/${file}`),
-                  })) || []
-                }
-              />
-            </YStack>
-          </ScrollView>
-        );
-      },
-      { compare: isEqual }
-    )
+    compareView((get) => {
+      if (libraryId !== '') return <LibraryItemScreen item={libraryId} />;
+      const lib = get(libraryIndex);
+      return (
+        <ScrollView>
+          <StackScreen title="Scene Library" />
+          <YStack padding="$4">
+            <ButtonGroup
+              items={
+                lib?.map((file) => ({
+                  key: file,
+                  label: file,
+                  onPress: navigate(`browse_library/${file}`),
+                })) || []
+              }
+            />
+          </YStack>
+        </ScrollView>
+      );
+    })
   ),
   reset_scene: lookup((scenePathStr) =>
-    view((get) => {
+    compareView((get) => {
       const scenePath = scenePathStr.split(':');
       const lib = get(libraryIndex);
       const media = get(mediaIndex);
@@ -351,7 +346,7 @@ export const models = {
     })
   ),
   add_scene: lookup((scenePath) =>
-    view((get) => {
+    compareView((get) => {
       const lib = get(libraryIndex);
       const media = get(mediaIndex);
 
@@ -383,7 +378,11 @@ export const models = {
                   goNextAfterLoops: 1,
                 };
                 navigatePath = `${scenePath}:item_${key}`;
-                return { ...scene, sequence: [...(scene.sequence || []), newItem] };
+                return {
+                  ...scene,
+                  sequence: [...(scene.sequence || []), newItem],
+                  ...(scene.activeKey ? {} : { activeKey: key, transitionEndTime: Date.now() }),
+                };
               }
               return scene;
             });
@@ -397,7 +396,7 @@ export const models = {
   ),
   global_effects: lookup((effectKey) => {
     if (effectKey) {
-      return view((get) => {
+      return compareView((get) => {
         const state = get(mainState);
         if (!state) return <Spinner />;
         const effect = state.effects?.find((e) => e.key === effectKey);
@@ -426,7 +425,7 @@ export const models = {
         );
       });
     }
-    return view((get) => {
+    return compareView((get) => {
       const state = get(mainState);
       if (!state) return <Spinner />;
       return (
@@ -451,111 +450,102 @@ export const models = {
     if (restPath[0] === 'effects') {
       if (restPath[1]) {
         const effectId = restPath[1].split('_')[1];
-        return view(
-          (get) => {
-            const sceneState = scene ? get(scene) : null;
-            if (!sceneState) return <SizableText>No Scene</SizableText>;
-            const effect = getSceneEffects(sceneState)?.find((e) => e.key === effectId);
-            if (!effect) return <SizableText>No Effect</SizableText>;
-            return (
-              <EffectScreen
-                effect={effect}
-                controlPath={path}
-                onEffect={(update: (e: Effect) => Effect) => {
-                  updateScene(scenePath, (scene) => {
-                    return {
-                      ...scene,
-                      effects: (getSceneEffects(scene) || []).map((e) => (e.key === effectId ? update(e) : e)),
-                    };
-                  });
-                }}
-                sliderFields={sliderFieldsModel ? get(sliderFieldsModel) : undefined}
-                onRemove={() => {
-                  updateScene(scenePath, (scene) => {
-                    return { ...scene, effects: (getSceneEffects(scene) || []).filter((e) => e.key !== effectId) };
-                  });
-                  return response(goBack());
-                }}
-              />
-            );
-          },
-          { compare: isEqual }
-        );
-      }
-      return view(
-        (get) => {
+        return compareView((get) => {
+          const sceneState = scene ? get(scene) : null;
+          if (!sceneState) return <SizableText>No Scene</SizableText>;
+          const effect = getSceneEffects(sceneState)?.find((e) => e.key === effectId);
+          if (!effect) return <SizableText>No Effect</SizableText>;
           return (
-            <EffectsScreen
-              scene={scene ? get(scene) : null}
-              onScene={(updater) => {
-                updateScene(scenePath, updater);
-              }}
+            <EffectScreen
+              effect={effect}
               controlPath={path}
+              onEffect={(update: (e: Effect) => Effect) => {
+                updateScene(scenePath, (scene) => {
+                  return {
+                    ...scene,
+                    effects: (getSceneEffects(scene) || []).map((e) => (e.key === effectId ? update(e) : e)),
+                  };
+                });
+              }}
+              sliderFields={sliderFieldsModel ? get(sliderFieldsModel) : undefined}
+              onRemove={() => {
+                updateScene(scenePath, (scene) => {
+                  return { ...scene, effects: (getSceneEffects(scene) || []).filter((e) => e.key !== effectId) };
+                });
+                return response(goBack());
+              }}
             />
           );
-        },
-        { compare: isEqual }
-      );
-    }
-    if (restPath.length) {
-      return () => <Text>Unrecognized Control Path</Text>;
-    }
-    return view(
-      (get) => {
-        let extraControls = null;
-        if (path.at(-1)?.startsWith('layer_')) {
-          const layerKey = path.at(-1)?.slice(6);
-          const layersPath = path.slice(0, -1);
-          const layersSceneModel = sceneState.get(layersPath.join(':'));
-          const layersScene = layersSceneModel ? get(layersSceneModel) : null;
-          const sliderFieldsModel = sliderFields.get(path[0]);
-          if (layersScene?.type === 'layers' && layerKey) {
-            extraControls = (
-              <LayerControls
-                layersScene={layersScene}
-                layerKey={layerKey}
-                scenePath={layersPath}
-                sliderFields={sliderFieldsModel ? get(sliderFieldsModel) : undefined}
-                onScene={(updater) => {
-                  updateScene(layersPath, updater);
-                }}
-              />
-            );
-          }
-        }
-        if (path.at(-1)?.startsWith('item_')) {
-          const itemKey = path.at(-1)?.slice(5);
-          const sequencePath = path.slice(0, -1);
-          const sequenceSceneModel = sceneState.get(sequencePath.join(':'));
-          const sequenceScene = sequenceSceneModel ? get(sequenceSceneModel) : null;
-          if (sequenceScene?.type === 'sequence' && itemKey) {
-            extraControls = (
-              <SqeuenceItemControls
-                sequenceScene={sequenceScene}
-                itemKey={itemKey}
-                onScene={(updater) => {
-                  updateScene(sequencePath, updater);
-                }}
-              />
-            );
-          }
-        }
-        const sliderFieldsModel = sliderFields.get(path[0]);
+        });
+      }
+      return compareView((get) => {
         return (
-          <SceneScreen
+          <EffectsScreen
             scene={scene ? get(scene) : null}
-            extraControls={extraControls}
-            sliderFields={sliderFieldsModel ? get(sliderFieldsModel) : undefined}
             onScene={(updater) => {
               updateScene(scenePath, updater);
             }}
             controlPath={path}
-            onGetMediaIndex={() => get(mediaIndex)}
           />
         );
-      },
-      { compare: isEqual }
-    );
+      });
+    }
+    if (restPath.length) {
+      return () => <Text>Unrecognized Control Path</Text>;
+    }
+    return compareView((get) => {
+      let extraControls = null;
+      if (path.at(-1)?.startsWith('layer_')) {
+        const layerKey = path.at(-1)?.slice(6);
+        const layersPath = path.slice(0, -1);
+        const layersSceneModel = sceneState.get(layersPath.join(':'));
+        const layersScene = layersSceneModel ? get(layersSceneModel) : null;
+        const sliderFieldsModel = sliderFields.get(path[0]);
+        if (layersScene?.type === 'layers' && layerKey) {
+          extraControls = (
+            <LayerControls
+              layersScene={layersScene}
+              layerKey={layerKey}
+              scenePath={layersPath}
+              sliderFields={sliderFieldsModel ? get(sliderFieldsModel) : undefined}
+              onScene={(updater) => {
+                updateScene(layersPath, updater);
+              }}
+            />
+          );
+        }
+      }
+      if (path.at(-1)?.startsWith('item_')) {
+        const itemKey = path.at(-1)?.slice(5);
+        const sequencePath = path.slice(0, -1);
+        const sequenceSceneModel = sceneState.get(sequencePath.join(':'));
+        const sequenceScene = sequenceSceneModel ? get(sequenceSceneModel) : null;
+        if (sequenceScene?.type === 'sequence' && itemKey) {
+          extraControls = (
+            <SqeuenceItemControls
+              sequenceScene={sequenceScene}
+              itemKey={itemKey}
+              onScene={(updater) => {
+                updateScene(sequencePath, updater);
+              }}
+            />
+          );
+        }
+      }
+      const sliderFieldsModel = sliderFields.get(path[0]);
+      return (
+        <SceneScreen
+          scene={scene ? get(scene) : null}
+          extraControls={extraControls}
+          sliderFields={sliderFieldsModel ? get(sliderFieldsModel) : undefined}
+          onScene={(updater) => {
+            updateScene(scenePath, updater);
+          }}
+          controlPath={path}
+          onGetMediaIndex={() => get(mediaIndex)}
+        />
+      );
+    });
   }),
 };
 
@@ -1346,6 +1336,7 @@ function NumericField({
   min,
   max,
   onValueChange,
+  unit,
 }: {
   label: string;
   value: number;
@@ -1353,12 +1344,16 @@ function NumericField({
   min: number;
   max: number;
   onValueChange: (v: number) => void;
+  unit?: string;
 }) {
   return (
     <YStack gap="$1" marginVertical="$1">
       <XStack jc="space-between">
         <Text>{label}</Text>
-        <Text color="$color9">{value}</Text>
+        <Text color="$color9">
+          {value}
+          {unit ? ` ${unit}` : ''}
+        </Text>
       </XStack>
       <SmoothSlider
         value={value}
@@ -1646,15 +1641,37 @@ function SqeuenceItemControls({
           onItem((i) => ({ ...i, goNextOnEnd }));
         }}
       />
-      {/* <NumericField
-        label="Go Next After Loop Count"
-        value={item.goNextAfterLoops ?? 1}
-        onValueChange={(goNextAfterLoops) => {
-          onItem((i) => ({ ...i, goNextAfterLoops }));
+      {/* {item.goNextOnEnd ? (
+        <NumericField
+          label="Go Next After Loop Count"
+          value={item.goNextAfterLoops ?? 1}
+          onValueChange={(goNextAfterLoops) => {
+            onItem((i) => ({ ...i, goNextAfterLoops }));
+          }}
+          min={1}
+          max={20}
+        />
+      ) : null} */}
+      <SwitchField
+        label="Go Next on Duration"
+        value={item.maxDuration != null}
+        onValueChange={(maxDuration) => {
+          if (maxDuration) onItem((i) => ({ ...i, maxDuration: 10 }));
+          else onItem((i) => ({ ...i, maxDuration: null }));
         }}
-        min={1}
-        max={20}
-      /> */}
+      />
+      {item.maxDuration ? (
+        <NumericField
+          label="Go Next After Duration"
+          value={item.maxDuration ?? 1}
+          onValueChange={(maxDuration) => {
+            onItem((i) => ({ ...i, maxDuration }));
+          }}
+          min={1}
+          max={120}
+          unit="sec"
+        />
+      ) : null}
       <Button
         icon={<LucideIcon icon="PlayCircle" />}
         onPress={() => {
@@ -1683,7 +1700,18 @@ function SqeuenceItemControls({
         onPress={() => {
           onScene((scene) => {
             if (scene.type !== 'sequence') return scene;
-            return { ...scene, sequence: scene.sequence?.filter((item) => item.key !== itemKey) };
+            const newScene = { ...scene, sequence: scene.sequence?.filter((i) => i.key !== itemKey) };
+            if (scene.activeKey === itemKey) {
+              newScene.activeKey = newScene.sequence?.[0]?.key;
+              newScene.nextActiveKey = undefined;
+              newScene.transitionStartTime = undefined;
+              newScene.transitionEndTime = Date.now();
+            } else if (scene.nextActiveKey === itemKey) {
+              newScene.nextActiveKey = undefined;
+              newScene.transitionStartTime = undefined;
+              newScene.transitionEndTime = Date.now();
+            }
+            return newScene;
           });
           return response(goBack());
         }}
@@ -1969,6 +1997,7 @@ function SequenceScreen({ scene, onScene, controlPath, extraControls }: SceneScr
   );
 }
 
+let debugLast = {};
 function GenericSceneControls({
   controlPath,
   scene,
@@ -1978,6 +2007,12 @@ function GenericSceneControls({
   scene: Scene;
   onScene: (update: (m: Scene) => Scene) => void;
 }) {
+  // const last = debugLast[controlPath.join(':')];
+  // if (last) {
+  //   console.log(controlPath, compare(last, scene));
+  // }
+  // debugLast[controlPath.join(':')] = scene;
+  // console.log('label!', controlPath);
   const rootScene = controlPath[0];
   const labelId = `label-${controlPath.join(':')}`;
   return (

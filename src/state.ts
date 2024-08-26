@@ -12,6 +12,31 @@ const [_mainState, setMainState] = state<MainState | null>(null);
 
 export const mainState = _mainState;
 
+function startScene(scene: Scene): Scene {
+  if (scene.type === 'layers') {
+    return {
+      ...scene,
+      layers: scene.layers.map((layer) => ({
+        ...layer,
+        scene: startScene(layer.scene),
+      })),
+    };
+  }
+  if (scene.type === 'sequence') {
+    return {
+      ...scene,
+      transitionEndTime: Date.now(),
+      nextActiveKey: undefined,
+      transitionStartTime: undefined,
+      sequence: scene.sequence.map((item) => ({
+        ...item,
+        scene: startScene(item.scene),
+      })),
+    };
+  }
+  return scene;
+}
+
 async function init() {
   if (existsSync(mainStatePath)) {
     try {
@@ -26,7 +51,12 @@ async function init() {
       if (!state.data) {
         throw new Error('Invalid saved state');
       }
-      setMainState(state.data);
+      const stateStarted = {
+        ...state.data,
+        liveScene: startScene(state.data.liveScene),
+        readyScene: startScene(state.data.readyScene),
+      };
+      setMainState(stateStarted);
     } catch (e) {
       console.warn('Could not load main state. Creating new one.');
       console.warn(e);

@@ -233,7 +233,6 @@ export function egVideo(
       }
     }
     function handleFrameIndexUpdate(frameIndex: number) {
-      // playerId
       playback.playingFrame = frameIndex;
       onFrameInfo?.(playerId, playback);
     }

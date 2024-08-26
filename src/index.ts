@@ -9,6 +9,8 @@ import { initMidiController } from './midi';
 import { models } from './models';
 import { bounceTimes, goNext, mainState, mainStateUpdate, updateScene } from './state';
 import { MainState, Scene } from './state-schema';
+// import { compare } from 'fast-json-patch';
+import { DefaultTransitionDuration } from './constants';
 
 initMidiController();
 
@@ -128,45 +130,52 @@ setInterval(() => {
 
 mainState.subscribe((state) => {
   if (!state) return;
-
+  if (prevState) {
+    // const patch = compare(prevState, state);
+    // console.log('MainState update', patch);
+    // console.log(state);
+  } else {
+    // handle state loaded..?
+  }
   // init all video players
-  matchAllScenes(state, (media) => {
-    if (media.type === 'video') {
-      const player = mainVideo.getPlayer(media.id);
-      if (media.params) player.setParams(media.params);
-      if (media.track) player.selectVideo(media.track);
+  matchAllScenes(state, (scene, controlPath) => {
+    const mainScenePath = controlPath[0];
+    if (scene.type === 'video') {
+      const player = mainVideo.getPlayer(scene.id);
+      if (scene.params) player.setParams(scene.params);
+      if (scene.track) player.selectVideo(scene.track);
       return true;
     }
     return false;
   });
 
   // handle auto transitioning with maxDuration
-  matchAllScenes(state, (media, controlPath) => {
-    if (media.type === 'sequence') {
-      const activeItem = getSequenceActiveItem(media);
-      if (!activeItem || !activeItem.maxDuration) {
-        return false;
-      }
-      const controlPathString = controlPath.join('.');
-      clearTimeout(sequenceAutoTransitions[controlPathString]);
-      const maxDurationMs = 1_000 * activeItem.maxDuration;
-      const timeUntilMaxDuration = media.transitionStartTime
-        ? media.transitionStartTime + maxDurationMs - Date.now()
-        : maxDurationMs;
-      sequenceAutoTransitions[controlPathString] = setTimeout(
-        () => {
-          // delete sequenceVideoEndTransitions[controlPathString];
-          delete sequenceAutoTransitions[controlPathString];
-          goNext(controlPath);
-        },
-        Math.max(1, timeUntilMaxDuration)
-      );
-      return true;
-    }
-    return false;
-  });
+  // matchAllScenes(state, (media, controlPath) => {
+  //   if (media.type === 'sequence') {
+  //     const activeItem = getSequenceActiveItem(media);
+  //     if (!activeItem || !activeItem.maxDuration) {
+  //       return false;
+  //     }
+  //     const controlPathString = controlPath.join('.');
+  //     clearTimeout(sequenceAutoTransitions[controlPathString]);
+  //     const maxDurationMs = 1_000 * activeItem.maxDuration;
+  //     const timeUntilMaxDuration = media.transitionStartTime
+  //       ? media.transitionStartTime + maxDurationMs - Date.now()
+  //       : maxDurationMs;
+  //     sequenceAutoTransitions[controlPathString] = setTimeout(
+  //       () => {
+  //         // delete sequenceVideoEndTransitions[controlPathString];
+  //         delete sequenceAutoTransitions[controlPathString];
+  //         goNext(controlPath);
+  //       },
+  //       Math.max(1, timeUntilMaxDuration)
+  //     );
+  //     return true;
+  //   }
+  //   return false;
+  // });
   handleSequenceTransitionEnding(state);
-  handleSequenceVideoEnding(state);
+  handleSequenceTransitionStarting(state);
   // handleAudioPlayback(state, prevState);
   prevState = state;
 });
@@ -236,7 +245,7 @@ function handleSequenceTransitionEnding(state: MainState) {
             if (!nextActiveKey) return scene;
             return {
               ...scene,
-              transitionEndTime: undefined,
+              transitionEndTime: Date.now(),
               transitionStartTime: undefined,
               activeKey: nextActiveKey,
               nextActiveKey: undefined,
@@ -252,31 +261,46 @@ function handleSequenceTransitionEnding(state: MainState) {
   });
 }
 
-function handleSequenceVideoEnding(state: MainState) {
+function handleSequenceTransitionStarting(state: MainState) {
   matchAllScenes(state, (scene, controlPath) => {
     if (scene.type !== 'sequence') return false;
     const controlPathString = controlPath.join(':');
     const activeItem = getSequenceActiveItem(scene);
     if (!activeItem) return false;
-    if (activeItem.scene.type !== 'video') return false;
     clearTimeout(sequenceVideoEndTransitions[controlPathString]);
-    if (!activeItem.goNextOnEnd) return false;
-    const player = mainVideo.getPlayer(activeItem.scene.id);
-    if (!player) return false;
-    const playingFrame = player.getPlayingFrame();
-    const frameCount = player.getFrameCount();
-    if (playingFrame === null || frameCount === null) return false;
-    const framesRemaining = frameCount - playingFrame;
-    const approxTimeRemaining = (1000 * framesRemaining) / mainAnimationFPS;
-    sequenceVideoEndTransitions[controlPathString] = setTimeout(
-      () => {
-        console.log('video ended. going next.');
-        delete sequenceVideoEndTransitions[controlPathString];
-        delete sequenceAutoTransitions[controlPathString];
-        goNext(controlPath);
-      },
-      Math.max(1, approxTimeRemaining)
-    );
+    // this is approximate because it depends on the (dropped) frames, so we frequently re-run handleSequenceTransitionStarting
+    let approxTimeRemaining: number | undefined = undefined;
+    if (scene.transitionStartTime) {
+      // mid transition. no need to schedule a transition start
+      return false;
+    }
+    if (activeItem.scene.type === 'video' && activeItem.goNextOnEnd) {
+      const player = mainVideo.getPlayer(activeItem.scene.id);
+      if (!player) return false;
+      const playingFrame = player.getPlayingFrame();
+      const frameCount = player.getFrameCount();
+      if (playingFrame === null || frameCount === null) return false;
+      const framesRemaining = frameCount - playingFrame;
+      const transitionDuration = scene.transition?.duration || DefaultTransitionDuration;
+      approxTimeRemaining = (1000 * framesRemaining) / mainAnimationFPS - transitionDuration;
+    }
+    if (activeItem.maxDuration && scene.transitionEndTime) {
+      const maxDuration = activeItem.maxDuration * 1000;
+      const maxDurationRemaining = scene.transitionEndTime - Date.now() + maxDuration;
+      approxTimeRemaining = approxTimeRemaining
+        ? Math.min(approxTimeRemaining, maxDurationRemaining)
+        : maxDurationRemaining;
+    }
+    if (approxTimeRemaining) {
+      sequenceVideoEndTransitions[controlPathString] = setTimeout(
+        () => {
+          delete sequenceVideoEndTransitions[controlPathString];
+          delete sequenceAutoTransitions[controlPathString];
+          goNext(controlPath);
+        },
+        Math.max(1, approxTimeRemaining)
+      );
+    }
     return true;
   });
 }
@@ -284,7 +308,7 @@ function handleSequenceVideoEnding(state: MainState) {
 setInterval(() => {
   const state = mainState.get();
   if (!state) return;
-  handleSequenceVideoEnding(state);
+  handleSequenceTransitionStarting(state);
 }, 100);
 
 function fetchMedia(scene: Scene, path: string[]): [string[], Scene][] {
