@@ -31,6 +31,7 @@ import {
   XStack,
   YStack,
 } from '@rise-tools/kitchen-sink/server';
+import { execFileSync } from 'child_process';
 import { ActionModelState, createComponentDefinition, ref, response } from '@rise-tools/react';
 import { lookup, view } from '@rise-tools/server';
 import { createComponentDefinition, ref, response } from '@rise-tools/react';
@@ -115,43 +116,55 @@ export const models = {
     const state = get(mainState);
     if (!state) return <Spinner />;
     return (
-      <ScrollView>
+      <NarrowScrollView>
         <YStack gap="$4" padding="$4">
-          <XStack gap="$1">
-            <Button flex={1} onPress={navigate('control/live')}>
-              Live: {getScreenTitle(state.liveScene, ['live'])}
-            </Button>
-            <Button chromeless icon={<LucideIcon icon="LayoutDashboard" />} onPress={navigate('dashboard/live')} />
+          <XStack gap="$4">
+            <YStack f={1} gap="$2">
+              <Button flex={1} onPress={navigate('control/live')} height={80}>
+                Live: {getScreenTitle(state.liveScene, ['live'])}
+              </Button>
+              <Button chromeless icon={<LucideIcon icon="LayoutDashboard" />} onPress={navigate('dashboard/live')}>
+                Live Dashboard
+              </Button>
+            </YStack>
+            <YStack f={1} gap="$2">
+              <Button flex={1} onPress={navigate('control/ready')}>
+                Ready: {getScreenTitle(state.readyScene, ['ready'])}
+              </Button>
+              <Button chromeless icon={<LucideIcon icon="LayoutDashboard" />} onPress={navigate('dashboard/ready')}>
+                Ready Dashboard
+              </Button>
+            </YStack>
           </XStack>
-          <XStack gap="$1">
-            <Button flex={1} onPress={navigate('control/ready')}>
-              Ready: {getScreenTitle(state.readyScene, ['ready'])}
-            </Button>
-            <Button chromeless icon={<LucideIcon icon="LayoutDashboard" />} onPress={navigate('dashboard/ready')} />
-          </XStack>
-          <Button
-            onPress={() => {
-              startAutoTransition();
-            }}
-            disabled={state.transitionState.manual !== null}
-            icon={<LucideIcon icon="PlayCircle" />}
-          >
-            Start Transition
-          </Button>
-          <EditTransition
-            transition={state.transition}
-            onTransition={(update) => mainStateUpdate((state) => ({ ...state, transition: update(state.transition) }))}
-          />
           <AutoTransitionProgress transitionState={state.transitionState} transition={state.transition} />
+          <XStack jc="center">
+            <YStack gap="$2">
+              <Button
+                height={80}
+                theme="green"
+                paddingHorizontal="$6"
+                onPress={() => {
+                  startAutoTransition();
+                }}
+                disabled={state.transitionState.manual !== null}
+                icon={<LucideIcon icon="PlayCircle" />}
+              >
+                Start Transition
+              </Button>
+              <EditTransition
+                transition={state.transition}
+                onTransition={(update) =>
+                  mainStateUpdate((state) => ({ ...state, transition: update(state.transition) }))
+                }
+              />
+            </YStack>
+          </XStack>
           {/* <YStack width="100%" aspectRatio={1} backgroundColor="red">
         <WebView
           style={{ flex: 1, backgroundColor: 'white', pointerEvents: 'none' }}
           source={{ uri: 'http://localhost:3000/eg-live' }}
         />
       </YStack> */}
-          <Button onPress={navigate(`global_effects`)} icon={<LucideIcon icon="Sparkles" />}>
-            Global Effects
-          </Button>
         </YStack>
         <Section title="Library">
           <Button icon={<LucideIcon icon="Library" />} onPress={navigate('browse_videos')}>
@@ -161,9 +174,53 @@ export const models = {
             Scenes
           </Button>
         </Section>
-      </ScrollView>
+        <Section title="Setup">
+          <XStack>
+            <Button chromeless onPress={navigate(`global_effects`)} icon={<LucideIcon icon="Sparkles" />}>
+              Global Effects
+            </Button>
+            <Button chromeless icon={<LucideIcon icon="Wrench" />} onPress={navigate('admin')}>
+              Administration
+            </Button>
+          </XStack>
+        </Section>
+      </NarrowScrollView>
     );
   }),
+  admin: () => (
+    <NarrowScrollView>
+      <StackScreen title="Administration" />
+      <Section title="Data">
+        <Button
+          icon={<LucideIcon icon="FolderSync" />}
+          onPress={() => {
+            libraryIndex.invalidate();
+          }}
+        >
+          Reload Scene Library
+        </Button>
+        <Button
+          icon={<LucideIcon icon="FolderSync" />}
+          onPress={() => {
+            mediaIndex.invalidate();
+          }}
+        >
+          Reload Media Index
+        </Button>
+      </Section>
+      <Section title="Danger">
+        <Button
+          theme="red"
+          icon={<LucideIcon icon="ServerCrash" />}
+          onPress={() => {
+            execFileSync('pm2', ['restart', 'eclipse']);
+          }}
+        >
+          Restart Server
+        </Button>
+      </Section>
+    </NarrowScrollView>
+  ),
   dashboard: lookup((dashboardKey) => {
     const dashboard = dashboards.get(dashboardKey);
     return compareView((get) => {
@@ -554,7 +611,7 @@ export const models = {
 
 function LibraryItemScreen({ item }: { item: string }) {
   return (
-    <ScrollView>
+    <NarrowScrollView>
       <StackScreen title={item} />
       <YStack padding="$4" gap="$4">
         <Button
@@ -596,7 +653,7 @@ function LibraryItemScreen({ item }: { item: string }) {
           Delete from Library
         </Button>
       </YStack>
-    </ScrollView>
+    </NarrowScrollView>
   );
 }
 
@@ -714,7 +771,7 @@ function BrowseMediaScreen({
   importing: ImportState | null | undefined;
 }) {
   return (
-    <ScrollView>
+    <NarrowScrollView>
       <StackScreen title="Media Library" />
       <YStack gap="$1" padding="$4">
         <ButtonGroup
@@ -749,14 +806,14 @@ function BrowseMediaScreen({
           </YStack>
         ))}
       </Section>
-    </ScrollView>
+    </NarrowScrollView>
   );
 }
 
 function MediaFileScreen({ file }: { file: MediaFile | undefined }) {
   if (!file) return <SizableText>No File</SizableText>;
   return (
-    <ScrollView>
+    <NarrowScrollView>
       <StackScreen title={file.title} />
       <YStack gap="$4" padding="$4">
         <Text>{file.title}</Text>
@@ -803,14 +860,14 @@ function MediaFileScreen({ file }: { file: MediaFile | undefined }) {
           Delete File
         </Button>
       </YStack>
-    </ScrollView>
+    </NarrowScrollView>
   );
 }
 
 function DashboardScreen({ dashboard, dashboardKey }: { dashboardKey: string; dashboard?: DashboardState }) {
   const title = dashboardKey === 'live' ? 'Live Dashboard' : 'Ready Dashboard';
   return (
-    <ScrollView>
+    <NarrowScrollView>
       <StackScreen title={title} headerBackTitle={' '} />
       <YStack gap="$4" padding="$4">
         {dashboard?.items?.filter((item) => !!item).map((item) => <DashboardItem item={item} key={item.key} />)}
@@ -822,7 +879,7 @@ function DashboardScreen({ dashboard, dashboardKey }: { dashboardKey: string; da
           Edit Dashboard
         </Button>
       </YStack>
-    </ScrollView>
+    </NarrowScrollView>
   );
 }
 
@@ -861,7 +918,7 @@ function EditDashboardScreen({
 
 function EditDashboardItemScreen({ item, dashboardKey }: { item: DashboardStateItem; dashboardKey: 'live' | 'ready' }) {
   return (
-    <YStack padding="$4" gap="$4">
+    <NarrowScrollView>
       <StackScreen title={item.label} headerBackTitle={' '} />
       <DashboardItemHeader item={item} />
       <SizableText color="$color9">{item.hardwareLabel}</SizableText>
@@ -874,7 +931,7 @@ function EditDashboardItemScreen({ item, dashboardKey }: { item: DashboardStateI
       >
         Remove from Dashboard
       </Button>
-    </YStack>
+    </NarrowScrollView>
   );
 }
 
@@ -1012,7 +1069,7 @@ function AutoTransitionProgress({
   const timeRemaining = Math.max(0, autoStartTime ? duration - (now - autoStartTime) : 0);
   const currentProgress = autoStartTime ? Math.min(1, (now - autoStartTime) / duration) : null;
   return (
-    <YStack height={10}>
+    <YStack height={10} paddingHorizontal="$6">
       <AnimatedProgress
         duration={timeRemaining}
         endProgress={autoStartTime ? 1 : 0}
@@ -1110,7 +1167,7 @@ function EffectsScreen({
 }) {
   if (!scene) return <SizableText>No Scene</SizableText>;
   return (
-    <ScrollView>
+    <NarrowScrollView>
       <StackScreen title={`Fx: ${getScreenTitle(scene, controlPath)}`} headerBackTitle={' '} />
       {getSceneEffects(scene)?.map((effect) => (
         <Button
@@ -1133,14 +1190,14 @@ function EffectsScreen({
           }
         />
         <Button
-          flex={1}
+          chromeless
           onPress={navigate(`reorder_effects/${controlPath.slice(0, -1).join(':')}`)}
           icon={<LucideIcon icon="ArrowUpDown" />}
         >
           Effect Order
         </Button>
       </XStack>
-    </ScrollView>
+    </NarrowScrollView>
   );
 }
 
@@ -1152,7 +1209,7 @@ function GlobalEffectsScreen({
   onEffects: (update: (m?: Effect[]) => Effect[]) => void;
 }) {
   return (
-    <ScrollView>
+    <NarrowScrollView>
       <StackScreen title={`Global Fx`} headerBackTitle={' '} />
       {effects?.map((effect) => (
         <Button
@@ -1168,7 +1225,7 @@ function GlobalEffectsScreen({
       <YStack gap="$4" padding="$4">
         <NewEffectButton getFollowupPath={(key) => `global_effects/${key}`} onEffects={onEffects} />
       </YStack>
-    </ScrollView>
+    </NarrowScrollView>
   );
 }
 
@@ -1192,33 +1249,31 @@ function NewEffectButton({
   onEffects: (update: (m?: Effect[]) => Effect[]) => void;
 }) {
   return (
-    <View flex={1}>
-      <BottomSheet
-        frameProps={{ padding: 0 }}
-        trigger={
-          <BottomSheetTriggerButton flex={1} icon={<LucideIcon icon="Sparkles" />}>
-            Add Effect
-          </BottomSheetTriggerButton>
-        }
-      >
-        <Section title="Add Effect">
-          <ButtonGroup
-            Button={BottomSheetCloseButton}
-            items={EffectTypes.map(({ key, label }) => ({
-              key,
-              label,
-              onPress: () => {
-                const newEffect = createBlankEffect(key);
-                onEffects((effects) => {
-                  return [...(effects || []), newEffect];
-                });
-                return response(navigate(getFollowupPath(newEffect.key)));
-              },
-            }))}
-          />
-        </Section>
-      </BottomSheet>
-    </View>
+    <BottomSheet
+      frameProps={{ padding: 0 }}
+      trigger={
+        <BottomSheetTriggerButton chromeless icon={<LucideIcon icon="Sparkles" />}>
+          Add Effect
+        </BottomSheetTriggerButton>
+      }
+    >
+      <Section title="Add Effect">
+        <ButtonGroup
+          Button={BottomSheetCloseButton}
+          items={EffectTypes.map(({ key, label }) => ({
+            key,
+            label,
+            onPress: () => {
+              const newEffect = createBlankEffect(key);
+              onEffects((effects) => {
+                return [...(effects || []), newEffect];
+              });
+              return response(navigate(getFollowupPath(newEffect.key)));
+            },
+          }))}
+        />
+      </Section>
+    </BottomSheet>
   );
 }
 
@@ -1266,13 +1321,17 @@ function EffectScreen({
     controls = <EffectColorizeControls effect={effect} {...effectProps} />;
   }
   return (
-    <YStack flex={1} padding="$4" gap="$4">
-      {/* <StackScreen title={`Fx: ${getScreenTitle(scene, controlPath)}`} headerBackTitle={' '} /> */}
-      {controls}
-      <Button onPress={onRemove} icon={<LucideIcon icon="Trash" />}>
-        Remove Effect
-      </Button>
-    </YStack>
+    <NarrowScrollView>
+      <YStack flex={1} padding="$4" gap="$4">
+        {/* <StackScreen title={`Fx: ${getScreenTitle(scene, controlPath)}`} headerBackTitle={' '} /> */}
+        {controls}
+        <XStack gap="$4">
+          <Button theme="red" marginTop="$5" onPress={onRemove} icon={<LucideIcon icon="Trash" />}>
+            Remove Effect
+          </Button>
+        </XStack>
+      </YStack>
+    </NarrowScrollView>
   );
 }
 
@@ -1637,13 +1696,39 @@ function SqeuenceItemControls({
   }
   return (
     <Section title="Sequence Item">
-      <SwitchField
-        label="Go Next on End"
-        value={item.goNextOnEnd || false}
-        onValueChange={(goNextOnEnd) => {
-          onItem((i) => ({ ...i, goNextOnEnd }));
+      <Button
+        theme="green"
+        icon={<LucideIcon icon="PlayCircle" />}
+        onPress={() => {
+          onScene((scene) => {
+            if (scene.type !== 'sequence') return scene;
+            if (scene.activeKey === itemKey) return scene;
+            if (!scene.sequence.length) return scene;
+            let transitionDuration = 0;
+            if (scene.transition?.duration) {
+              transitionDuration = scene.transition.duration;
+            }
+            const now = Date.now();
+            return {
+              ...scene,
+              nextActiveKey: itemKey,
+              transitionEndTime: now + transitionDuration,
+              transitionStartTime: now,
+            };
+          });
         }}
-      />
+      >
+        Play
+      </Button>
+      {item.scene.type === 'video' ? (
+        <SwitchField
+          label="Go Next on End"
+          value={item.goNextOnEnd || false}
+          onValueChange={(goNextOnEnd) => {
+            onItem((i) => ({ ...i, goNextOnEnd }));
+          }}
+        />
+      ) : null}
       {/* {item.goNextOnEnd ? (
         <NumericField
           label="Go Next After Loop Count"
@@ -1675,52 +1760,32 @@ function SqeuenceItemControls({
           unit="sec"
         />
       ) : null}
-      <Button
-        icon={<LucideIcon icon="PlayCircle" />}
-        onPress={() => {
-          onScene((scene) => {
-            if (scene.type !== 'sequence') return scene;
-            if (scene.activeKey === itemKey) return scene;
-            if (!scene.sequence.length) return scene;
-            let transitionDuration = 0;
-            if (scene.transition?.duration) {
-              transitionDuration = scene.transition.duration;
-            }
-            const now = Date.now();
-            return {
-              ...scene,
-              nextActiveKey: itemKey,
-              transitionEndTime: now + transitionDuration,
-              transitionStartTime: now,
-            };
-          });
-        }}
-      >
-        Transition to Item
-      </Button>
-      <Button
-        icon={<LucideIcon icon="Trash" />}
-        onPress={() => {
-          onScene((scene) => {
-            if (scene.type !== 'sequence') return scene;
-            const newScene = { ...scene, sequence: scene.sequence?.filter((i) => i.key !== itemKey) };
-            if (scene.activeKey === itemKey) {
-              newScene.activeKey = newScene.sequence?.[0]?.key;
-              newScene.nextActiveKey = undefined;
-              newScene.transitionStartTime = undefined;
-              newScene.transitionEndTime = Date.now();
-            } else if (scene.nextActiveKey === itemKey) {
-              newScene.nextActiveKey = undefined;
-              newScene.transitionStartTime = undefined;
-              newScene.transitionEndTime = Date.now();
-            }
-            return newScene;
-          });
-          return response(goBack());
-        }}
-      >
-        Remove Item
-      </Button>
+      <XStack gap="$4">
+        <Button
+          theme="red"
+          icon={<LucideIcon icon="Trash" />}
+          onPress={() => {
+            onScene((scene) => {
+              if (scene.type !== 'sequence') return scene;
+              const newScene = { ...scene, sequence: scene.sequence?.filter((i) => i.key !== itemKey) };
+              if (scene.activeKey === itemKey) {
+                newScene.activeKey = newScene.sequence?.[0]?.key;
+                newScene.nextActiveKey = undefined;
+                newScene.transitionStartTime = undefined;
+                newScene.transitionEndTime = Date.now();
+              } else if (scene.nextActiveKey === itemKey) {
+                newScene.nextActiveKey = undefined;
+                newScene.transitionStartTime = undefined;
+                newScene.transitionEndTime = Date.now();
+              }
+              return newScene;
+            });
+            return response(goBack());
+          }}
+        >
+          Remove Item
+        </Button>
+      </XStack>
     </Section>
   );
 }
@@ -1955,49 +2020,52 @@ function SequenceScreen({ scene, onScene, controlPath, extraControls }: SceneScr
     return undefined;
   }
   return (
-    <ScrollView>
-      {(
-        scene?.sequence?.map((item) => ({
-          label: getScreenTitle(item.scene, [...controlPath, `item_${item.key}`]),
-          bg: bgColorOfItem(item),
-          key: item.key,
-          // onPress: navigate(`control/${controlPath.join(':')}:item_${item.key}`),
-        })) || []
-      ).map((item) => (
-        <Button
-          marginHorizontal="$4"
-          marginVertical="$1"
-          backgroundColor={item.bg}
-          onPress={() => {
-            return response(navigate(`control/${controlPath.join(':')}:item_${item.key}`));
-          }}
-        >
-          {item.label}
-        </Button>
-      ))}
-      <YStack gap="$4" padding="$4">
-        <Button
-          icon={<LucideIcon icon="Play" />}
-          onPress={() => {
-            goNext(controlPath);
-          }}
-        >
-          Go Next
-        </Button>
-        <SetTransitionButton scene={scene} onScene={onScene} />
-        <NewSequenceItem controlPath={controlPath} onScene={onScene} />
+    <NarrowScrollView>
+      <Section title="Sequence Order">
+        {scene?.sequence?.map((item) => (
+          <Button
+            key={item.key}
+            backgroundColor={bgColorOfItem(item)}
+            onPress={() => {
+              return response(navigate(`control/${controlPath.join(':')}:item_${item.key}`));
+            }}
+          >
+            {getScreenTitle(item.scene, [...controlPath, `item_${item.key}`])}
+          </Button>
+        ))}
+        <XStack gap="$4">
+          <NewSequenceItem controlPath={controlPath} onScene={onScene} />
+          <Button
+            chromeless
+            onPress={navigate(`reorder_sequence/${controlPath.join(':')}`)}
+            icon={<LucideIcon icon="ArrowUpDown" />}
+          >
+            Reorder Sequence
+          </Button>
+        </XStack>
+      </Section>
+      <Section title="Sequence Controls">
+        <XStack gap="$4">
+          <Button
+            theme="green"
+            icon={<LucideIcon icon="Play" />}
+            onPress={() => {
+              goNext(controlPath);
+            }}
+          >
+            Play Next
+          </Button>
+          <SetTransitionButton scene={scene} onScene={onScene} />
+        </XStack>
         <SceneEffectsButton controlPath={controlPath} />
-        <Button
-          onPress={navigate(`reorder_sequence/${controlPath.join(':')}`)}
-          icon={<LucideIcon icon="ArrowUpDown" />}
-        >
-          Reorder Sequence
-        </Button>
-        {extraControls}
-        <GenericSceneControls controlPath={controlPath} scene={scene} onScene={onScene} />
-        <ResetSceneButton controlPath={controlPath} scene={scene} onScene={onScene} />
-      </YStack>
-    </ScrollView>
+      </Section>
+      {extraControls}
+      <GenericSceneSection controlPath={controlPath} scene={scene} onScene={onScene}>
+        <XStack gap="$4">
+          <ResetSceneButton controlPath={controlPath} scene={scene} onScene={onScene} />
+        </XStack>
+      </GenericSceneSection>
+    </NarrowScrollView>
   );
 }
 
@@ -2011,7 +2079,9 @@ function SetTransitionButton({
   return (
     <BottomSheet
       trigger={
-        <BottomSheetTriggerButton icon={<LucideIcon icon="Presentation" />}>Set Transition</BottomSheetTriggerButton>
+        <BottomSheetTriggerButton chromeless icon={<LucideIcon icon="Presentation" />}>
+          Set Transition
+        </BottomSheetTriggerButton>
       }
     >
       <EditTransitionForm
@@ -2083,14 +2153,16 @@ function EditTransitionForm({
 }
 
 let debugLast = {};
-function GenericSceneControls({
+function GenericSceneSection({
   controlPath,
   scene,
   onScene,
+  children,
 }: {
   controlPath: string[];
   scene: Scene;
   onScene: (update: (m: Scene) => Scene) => void;
+  children?: JSXElement;
 }) {
   // const last = debugLast[controlPath.join(':')];
   // if (last) {
@@ -2102,40 +2174,58 @@ function GenericSceneControls({
   const labelId = `label-${controlPath.join(':')}`;
   return (
     <>
-      <BottomSheet
-        trigger={<BottomSheetTriggerButton icon={<LucideIcon icon="Tag" />}>Rename Scene</BottomSheetTriggerButton>}
-      >
-        <YStack flex={1}>
-          <RiseForm
-            onSubmit={(fields) => {
-              onScene((s) => ({ ...s, label: fields[labelId] }));
+      <Section title="Scene Options">
+        <XStack gap="$4">
+          <BottomSheet
+            trigger={
+              <BottomSheetTriggerButton chromeless icon={<LucideIcon icon="Tag" />}>
+                Rename Scene
+              </BottomSheetTriggerButton>
+            }
+          >
+            <YStack flex={1}>
+              <RiseForm
+                onSubmit={(fields) => {
+                  onScene((s) => ({ ...s, label: fields[labelId] }));
+                }}
+              >
+                <InputField label="Scene Name" id={labelId} defaultValue={scene.label} />
+                <SubmitButton>Save Label</SubmitButton>
+              </RiseForm>
+            </YStack>
+          </BottomSheet>
+          <Button
+            chromeless
+            icon={<LucideIcon icon="Download" />}
+            onPress={async () => {
+              console.log('Write Library Item', controlPath, scene);
+              await writeLibraryItem(controlPath, scene);
+              return response(toast('Saved to Library'));
             }}
           >
-            <InputField label="Scene Name" id={labelId} defaultValue={scene.label} />
-            <SubmitButton>Save Label</SubmitButton>
-          </RiseForm>
-        </YStack>
-      </BottomSheet>
-      <Button
-        icon={<LucideIcon icon="Download" />}
-        onPress={async () => {
-          console.log('Write Library Item', controlPath, scene);
-          await writeLibraryItem(controlPath, scene);
-          return response(toast('Saved to Library'));
-        }}
-      >
-        Save to Library
-      </Button>
-      <Button icon={<LucideIcon icon="LayoutDashboard" />} onPress={navigate(`dashboard/${rootScene}`)}>
-        {rootScene === 'live' ? 'Live Dashboard' : 'Ready Dashboard'}
-      </Button>
+            Save to Library
+          </Button>
+        </XStack>
+        {children}
+      </Section>
+      <Section title="Main Scene Dashboard">
+        <XStack>
+          <Button
+            marginTop="$4"
+            icon={<LucideIcon icon="LayoutDashboard" />}
+            onPress={navigate(`dashboard/${rootScene}`)}
+          >
+            {rootScene === 'live' ? 'Live Dashboard' : 'Ready Dashboard'}
+          </Button>
+        </XStack>
+      </Section>
     </>
   );
 }
 
 function ColorScreen({ scene, onScene, controlPath, extraControls, sliderFields }: SceneScreenProps<ColorScene>) {
   return (
-    <ScrollView>
+    <NarrowScrollView>
       <YStack gap="$4" padding="$4">
         <GradientSlider
           label={`Hue`}
@@ -2165,22 +2255,28 @@ function ColorScreen({ scene, onScene, controlPath, extraControls, sliderFields 
         />
 
         {extraControls}
-        <GenericSceneControls controlPath={controlPath} scene={scene} onScene={onScene} />
-        <ResetSceneButton controlPath={controlPath} scene={scene} onScene={onScene} />
+        <GenericSceneSection controlPath={controlPath} scene={scene} onScene={onScene}>
+          <XStack gap="$4">
+            <ResetSceneButton controlPath={controlPath} scene={scene} onScene={onScene} />
+          </XStack>
+        </GenericSceneSection>
       </YStack>
-    </ScrollView>
+    </NarrowScrollView>
   );
 }
 
 function OffScreen({ scene, onScene, controlPath, extraControls }: SceneScreenProps<OffScene>) {
   return (
-    <ScrollView>
+    <NarrowScrollView>
       <YStack gap="$4" padding="$4">
         {extraControls}
-        <GenericSceneControls controlPath={controlPath} scene={scene} onScene={onScene} />
-        <ResetSceneButton controlPath={controlPath} scene={scene} onScene={onScene} />
+        <GenericSceneSection controlPath={controlPath} scene={scene} onScene={onScene}>
+          <XStack gap="$4">
+            <ResetSceneButton controlPath={controlPath} scene={scene} onScene={onScene} />
+          </XStack>
+        </GenericSceneSection>
       </YStack>
-    </ScrollView>
+    </NarrowScrollView>
   );
 }
 
@@ -2193,32 +2289,40 @@ function iconOfBlendMode(blendMode: 'add' | 'mix' | 'mask') {
 
 function LayersScreen({ scene, onScene, controlPath, extraControls }: SceneScreenProps<LayersScene>) {
   return (
-    <ScrollView>
-      {scene.layers?.map((layer) => {
-        const isBaseLayer = layer === scene.layers?.at(-1);
-        return (
+    <NarrowScrollView>
+      <Section title="Layers">
+        {scene.layers?.map((layer) => {
+          const isBaseLayer = layer === scene.layers?.at(-1);
+          return (
+            <Button
+              key={layer.key}
+              icon={isBaseLayer ? null : iconOfBlendMode(layer.blendMode)}
+              onPress={navigate(`control/${controlPath.join(':')}:layer_${layer.key}`)}
+            >
+              {getScreenTitle(layer.scene, [...controlPath, `layer_${layer.key}`])}
+            </Button>
+          );
+        })}
+        <XStack gap="$4">
+          <NewLayerButton controlPath={controlPath} onScene={onScene} />
           <Button
-            marginHorizontal="$4"
-            marginVertical="$1"
-            key={layer.key}
-            icon={isBaseLayer ? null : iconOfBlendMode(layer.blendMode)}
-            onPress={navigate(`control/${controlPath.join(':')}:layer_${layer.key}`)}
+            chromeless
+            onPress={navigate(`reorder_layers/${controlPath.join(':')}`)}
+            icon={<LucideIcon icon="ArrowUpDown" />}
           >
-            {getScreenTitle(layer.scene, [...controlPath, `layer_${layer.key}`])}
+            Sort Layers
           </Button>
-        );
-      })}
-      <YStack gap="$4" padding="$4">
-        <NewLayerButton controlPath={controlPath} onScene={onScene} />
-        <Button onPress={navigate(`reorder_layers/${controlPath.join(':')}`)} icon={<LucideIcon icon="ArrowUpDown" />}>
-          Sort Layers
-        </Button>
+        </XStack>
         <SceneEffectsButton controlPath={controlPath} />
-        {extraControls}
-        <GenericSceneControls controlPath={controlPath} scene={scene} onScene={onScene} />
-        <ResetSceneButton controlPath={controlPath} scene={scene} onScene={onScene} />
-      </YStack>
-    </ScrollView>
+      </Section>
+
+      {extraControls}
+      <GenericSceneSection controlPath={controlPath} scene={scene} onScene={onScene}>
+        <XStack gap="$4">
+          <ResetSceneButton controlPath={controlPath} scene={scene} onScene={onScene} />
+        </XStack>
+      </GenericSceneSection>
+    </NarrowScrollView>
   );
 }
 
@@ -2232,7 +2336,11 @@ function NewLayerButton({
   return (
     <BottomSheet
       frameProps={{ padding: 0 }}
-      trigger={<BottomSheetTriggerButton icon={<LucideIcon icon="PlusCircle" />}>New Layer</BottomSheetTriggerButton>}
+      trigger={
+        <BottomSheetTriggerButton chromeless icon={<LucideIcon icon="PlusCircle" />}>
+          New Layer
+        </BottomSheetTriggerButton>
+      }
     >
       {ref('add_scene/' + controlPath.join(':'))}
     </BottomSheet>
@@ -2250,7 +2358,9 @@ function NewSequenceItem({
     <BottomSheet
       frameProps={{ padding: 0 }}
       trigger={
-        <BottomSheetTriggerButton icon={<LucideIcon icon="PlusCircle" />}>New Sequence Scene</BottomSheetTriggerButton>
+        <BottomSheetTriggerButton chromeless icon={<LucideIcon icon="PlusCircle" />}>
+          New Sequence Scene
+        </BottomSheetTriggerButton>
       }
     >
       {ref('add_scene/' + controlPath.join(':'))}
@@ -2289,37 +2399,30 @@ function ResetSceneButton({
   );
 }
 
+function NarrowScrollView({ children }: { children?: JSXElement }) {
+  return (
+    <ScrollView contentContainerStyle={{ justifyContent: 'center', flexDirection: 'row' }}>
+      <YStack f={1} maxWidth={600}>
+        {children}
+      </YStack>
+    </ScrollView>
+  );
+}
+
 function VideoScreen({ scene, onScene, controlPath, onGetMediaIndex, extraControls }: SceneScreenProps<VideoScene>) {
   const index = onGetMediaIndex();
   const trackOptions = index?.files.map((file) => ({ key: file.id, label: file.title }));
   return (
-    <ScrollView>
-      <YStack marginVertical="$4" marginHorizontal="$4" gap="$4">
+    <NarrowScrollView>
+      <Section title="Video">
         {scene?.track ? (
-          <XStack gap="$2">
-            <Button
-              flex={1}
-              onPress={navigate(`browse_videos/${scene.track}`)}
-              iconAfter={<LucideIcon icon="ChevronRight" />}
-            >
-              {index?.files.find((file) => file.id === scene.track)?.title || scene.track}
-            </Button>
-            {trackOptions && (
-              <SelectDropdown
-                triggerLabel=""
-                triggerProps={{ icon: <LucideIcon icon="Library" />, chromeless: true }}
-                value={scene?.track}
-                options={trackOptions}
-                onSelect={(key) => {
-                  onScene((scene) => ({
-                    ...scene,
-                    track: key,
-                    label: index?.files.find((f) => f.id === key)?.title || '?',
-                  }));
-                }}
-              />
-            )}
-          </XStack>
+          <Button
+            flex={1}
+            onPress={navigate(`browse_videos/${scene.track}`)}
+            iconAfter={<LucideIcon icon="ChevronRight" />}
+          >
+            {index?.files.find((file) => file.id === scene.track)?.title || scene.track}
+          </Button>
         ) : index?.files ? (
           trackOptions && (
             <SelectDropdown
@@ -2334,25 +2437,45 @@ function VideoScreen({ scene, onScene, controlPath, onGetMediaIndex, extraContro
         ) : (
           <Spinner />
         )}
-        <Button
-          onPress={() => {
-            const player = mainVideo.getPlayer(scene.id);
-            player?.restart();
-          }}
-        >
-          Restart Video
-        </Button>
+        <XStack gap="$4">
+          <Button
+            theme="green"
+            icon={<LucideIcon icon="RotateCcw" />}
+            onPress={() => {
+              const player = mainVideo.getPlayer(scene.id);
+              player?.restart();
+            }}
+          >
+            Restart Video
+          </Button>
+          {trackOptions && scene.track ? (
+            <SelectDropdown
+              triggerLabel="Swap Media"
+              triggerProps={{ icon: <LucideIcon icon="Library" />, chromeless: true }}
+              value={scene?.track}
+              options={trackOptions}
+              onSelect={(key) => {
+                onScene((scene) => ({
+                  ...scene,
+                  track: key,
+                  label: index?.files.find((f) => f.id === key)?.title || '?',
+                }));
+              }}
+            />
+          ) : null}
+        </XStack>
         {/* <Text>{JSON.stringify(scene)}</Text> */}
         {/* <Text>{JSON.stringify(index?.files)}</Text> */}
         <SceneEffectsButton controlPath={controlPath} />
-      </YStack>
+      </Section>
+
       {extraControls}
-      <Separator marginBottom="$4" />
-      <YStack marginHorizontal="$4" gap="$4">
-        <GenericSceneControls controlPath={controlPath} scene={scene} onScene={onScene} />
-        <ResetSceneButton controlPath={controlPath} scene={scene} onScene={onScene} />
-      </YStack>
-    </ScrollView>
+      <GenericSceneSection controlPath={controlPath} scene={scene} onScene={onScene}>
+        <XStack gap="$4">
+          <ResetSceneButton controlPath={controlPath} scene={scene} onScene={onScene} />
+        </XStack>
+      </GenericSceneSection>
+    </NarrowScrollView>
   );
 }
 
@@ -2410,7 +2533,9 @@ function EditTransition({
   return (
     <BottomSheet
       trigger={
-        <BottomSheetTriggerButton icon={<LucideIcon icon="Presentation" />}>Set Transition</BottomSheetTriggerButton>
+        <BottomSheetTriggerButton chromeless icon={<LucideIcon icon="Presentation" />}>
+          Set Transition
+        </BottomSheetTriggerButton>
       }
     >
       <EditTransitionForm transition={transition ?? DefaultTransition} onTransition={onTransition} />
