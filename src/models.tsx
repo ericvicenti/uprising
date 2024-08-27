@@ -184,6 +184,12 @@ export const models = {
             </Button>
           </XStack>
         </Section>
+        <Text marginVertical="$6" textAlign="center">
+          Powering the Entheos Empyrean Gate @ Burning Man 2024
+        </Text>
+        <Text marginVertical="$6" textAlign="center">
+          With ❤️ from Cosmic
+        </Text>
       </NarrowScrollView>
     );
   }),
@@ -1166,37 +1172,40 @@ function EffectsScreen({
   controlPath: string[];
 }) {
   if (!scene) return <SizableText>No Scene</SizableText>;
+  const effects = getSceneEffects(scene);
   return (
     <NarrowScrollView>
       <StackScreen title={`Fx: ${getScreenTitle(scene, controlPath)}`} headerBackTitle={' '} />
-      {getSceneEffects(scene)?.map((effect) => (
-        <Button
-          marginHorizontal="$4"
-          marginVertical="$1"
-          onPress={navigate(`control/${controlPath.join(':')}:effect_${effect.key}`)}
-          key={effect.key}
-        >
-          {effect.type}
-        </Button>
-      ))}
-      <XStack gap="$4" padding="$4">
-        <NewEffectButton
-          getFollowupPath={(key) => `control/${controlPath.join(':')}:effect_${key}`}
-          onEffects={(updater) =>
-            onScene((s) => ({
-              ...s,
-              effects: updater(getSceneEffects(s)),
-            }))
-          }
-        />
-        <Button
-          chromeless
-          onPress={navigate(`reorder_effects/${controlPath.slice(0, -1).join(':')}`)}
-          icon={<LucideIcon icon="ArrowUpDown" />}
-        >
-          Effect Order
-        </Button>
-      </XStack>
+      <Section title="Effect Order">
+        {effects?.map((effect) => (
+          <Button onPress={navigate(`control/${controlPath.join(':')}:effect_${effect.key}`)} key={effect.key}>
+            {effect.type}
+          </Button>
+        ))}
+        {effects?.length === 0 ? (
+          <Text color="$color9" marginVertical="$6">
+            No Effects Yet
+          </Text>
+        ) : null}
+        <XStack gap="$4" padding="$4">
+          <NewEffectButton
+            getFollowupPath={(key) => `control/${controlPath.join(':')}:effect_${key}`}
+            onEffects={(updater) =>
+              onScene((s) => ({
+                ...s,
+                effects: updater(getSceneEffects(s)),
+              }))
+            }
+          />
+          <Button
+            chromeless
+            onPress={navigate(`reorder_effects/${controlPath.slice(0, -1).join(':')}`)}
+            icon={<LucideIcon icon="ArrowUpDown" />}
+          >
+            Effect Order
+          </Button>
+        </XStack>
+      </Section>
     </NarrowScrollView>
   );
 }
@@ -2022,7 +2031,7 @@ function SequenceScreen({ scene, onScene, controlPath, extraControls }: SceneScr
   return (
     <NarrowScrollView>
       <Section title="Sequence Order">
-        {scene?.sequence?.map((item) => (
+        {scene.sequence?.map((item) => (
           <Button
             key={item.key}
             backgroundColor={bgColorOfItem(item)}
@@ -2033,6 +2042,12 @@ function SequenceScreen({ scene, onScene, controlPath, extraControls }: SceneScr
             {getScreenTitle(item.scene, [...controlPath, `item_${item.key}`])}
           </Button>
         ))}
+        {scene.sequence?.length === 0 ? (
+          <Text color="$color9" marginVertical="$6">
+            Empty Sequence Yet
+          </Text>
+        ) : null}
+
         <XStack gap="$4">
           <NewSequenceItem controlPath={controlPath} onScene={onScene} />
           <Button
@@ -2303,6 +2318,11 @@ function LayersScreen({ scene, onScene, controlPath, extraControls }: SceneScree
             </Button>
           );
         })}
+        {scene.layers?.length === 0 ? (
+          <Text color="$color9" marginVertical="$6">
+            No Layers Yet
+          </Text>
+        ) : null}
         <XStack gap="$4">
           <NewLayerButton controlPath={controlPath} onScene={onScene} />
           <Button
