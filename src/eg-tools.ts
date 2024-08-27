@@ -258,16 +258,63 @@ export function frameHueShift(info: EGInfo, frame: Frame, amount: number) {
   const { frameSize } = info;
   const outputFrame = new Uint8Array(frameSize);
   for (let i = 0; i < frameSize; i += 3) {
-    // const baseColor = chroma(frame[i], frame[i + 1], frame[i + 2])
-    // const desaturatedColor = chroma.hsl(
-    //   baseColor.get('hsl.h') + amount,
-    //   baseColor.get('hsl.s'),
-    //   baseColor.get('hsl.l')
-    // )
-    // outputFrame[i] = desaturatedColor.get('rgb.r')
-    // outputFrame[i + 1] = desaturatedColor.get('rgb.g')
-    // outputFrame[i + 2] = desaturatedColor.get('rgb.b')
-    shiftHue(frame[i], frame[i + 1], frame[i + 2], amount, outputFrame, i);
+    const normalizedRed = frame[i] / 255;
+    const normalizedGreen = frame[i + 1] / 255;
+    const normalizedBlue = frame[i + 2] / 255;
+    const max = Math.max(normalizedRed, normalizedGreen, normalizedBlue);
+    const min = Math.min(normalizedRed, normalizedGreen, normalizedBlue);
+    const luminance = (max + min) / 2;
+    let saturation = 0;
+    let hue = 0;
+    if (luminance !== 0 && luminance !== 1) {
+      saturation = (max - min) / (1 - Math.abs(2 * luminance - 1));
+    }
+    if (max !== min) {
+      if (max === normalizedRed) {
+        hue = 60 * (((normalizedGreen - normalizedBlue) / (max - min)) % 6);
+      } else if (max === normalizedGreen) {
+        hue = 60 * ((normalizedBlue - normalizedRed) / (max - min) + 2);
+      } else {
+        hue = 60 * ((normalizedRed - normalizedGreen) / (max - min) + 4);
+      }
+    }
+    let newHue = hue + amount;
+    if (newHue < 0) {
+      newHue += 360;
+    } else if (newHue >= 360) {
+      newHue -= 360;
+    }
+    const chroma = (1 - Math.abs(2 * luminance - 1)) * saturation;
+    const intermediateValue = chroma * (1 - Math.abs(((newHue / 60) % 2) - 1));
+    let newRed = 0;
+    let newGreen = 0;
+    let newBlue = 0;
+    if (newHue < 60) {
+      newRed = chroma;
+      newGreen = intermediateValue;
+    } else if (newHue < 120) {
+      newRed = intermediateValue;
+      newGreen = chroma;
+    } else if (newHue < 180) {
+      newGreen = chroma;
+      newBlue = intermediateValue;
+    } else if (newHue < 240) {
+      newGreen = intermediateValue;
+      newBlue = chroma;
+    } else if (newHue < 300) {
+      newRed = intermediateValue;
+      newBlue = chroma;
+    } else {
+      newRed = chroma;
+      newBlue = intermediateValue;
+    }
+    const luminanceMinusChroma = luminance - chroma / 2;
+    newRed = Math.round((newRed + luminanceMinusChroma) * 255);
+    newGreen = Math.round((newGreen + luminanceMinusChroma) * 255);
+    newBlue = Math.round((newBlue + luminanceMinusChroma) * 255);
+    outputFrame[i] = newRed;
+    outputFrame[i + 1] = newGreen;
+    outputFrame[i + 2] = newBlue;
   }
   return outputFrame;
 }
@@ -281,183 +328,6 @@ export function frameRotate(info: EGInfo, frame: Frame, amount: number) {
   outputFrame.set(frame.subarray(byteRotate));
   outputFrame.set(frame.subarray(0, byteRotate), frameSize - byteRotate);
   return outputFrame;
-}
-
-function shiftHue(
-  red: number,
-  green: number,
-  blue: number,
-  hueShiftDegrees: number,
-  outputBuffer: Uint8Array,
-  outputBufferOffset: number
-) {
-  // Normalize RGB values to the range [0, 1]
-  const normalizedRed = red / 255;
-  const normalizedGreen = green / 255;
-  const normalizedBlue = blue / 255;
-
-  // Find the maximum and minimum values among the normalized RGB values
-  const max = Math.max(normalizedRed, normalizedGreen, normalizedBlue);
-  const min = Math.min(normalizedRed, normalizedGreen, normalizedBlue);
-
-  // Calculate the luminance (lightness) of the color
-  const luminance = (max + min) / 2;
-
-  // Initialize the saturation and hue variables
-  let saturation = 0;
-  let hue = 0;
-
-  // Calculate the saturation if the luminance is not 0 or 1
-  if (luminance !== 0 && luminance !== 1) {
-    saturation = (max - min) / (1 - Math.abs(2 * luminance - 1));
-  }
-
-  // Calculate the hue based on the dominant color channel
-  if (max !== min) {
-    if (max === normalizedRed) {
-      hue = 60 * (((normalizedGreen - normalizedBlue) / (max - min)) % 6);
-    } else if (max === normalizedGreen) {
-      hue = 60 * ((normalizedBlue - normalizedRed) / (max - min) + 2);
-    } else {
-      hue = 60 * ((normalizedRed - normalizedGreen) / (max - min) + 4);
-    }
-  }
-
-  // Calculate the new hue value by adding the hue shift degrees
-  let newHue = hue + hueShiftDegrees;
-  if (newHue < 0) {
-    newHue += 360;
-  } else if (newHue >= 360) {
-    newHue -= 360;
-  }
-
-  // Calculate the chroma (color intensity) based on saturation and luminance
-  const chroma = (1 - Math.abs(2 * luminance - 1)) * saturation;
-
-  // Calculate the intermediate value used for RGB conversion
-  const intermediateValue = chroma * (1 - Math.abs(((newHue / 60) % 2) - 1));
-
-  // Calculate the RGB values based on the hue range
-  let newRed = 0;
-  let newGreen = 0;
-  let newBlue = 0;
-
-  if (newHue < 60) {
-    newRed = chroma;
-    newGreen = intermediateValue;
-  } else if (newHue < 120) {
-    newRed = intermediateValue;
-    newGreen = chroma;
-  } else if (newHue < 180) {
-    newGreen = chroma;
-    newBlue = intermediateValue;
-  } else if (newHue < 240) {
-    newGreen = intermediateValue;
-    newBlue = chroma;
-  } else if (newHue < 300) {
-    newRed = intermediateValue;
-    newBlue = chroma;
-  } else {
-    newRed = chroma;
-    newBlue = intermediateValue;
-  }
-
-  // Calculate the RGB values by adding the luminance minus chroma
-  const luminanceMinusChroma = luminance - chroma / 2;
-  newRed = Math.round((newRed + luminanceMinusChroma) * 255);
-  newGreen = Math.round((newGreen + luminanceMinusChroma) * 255);
-  newBlue = Math.round((newBlue + luminanceMinusChroma) * 255);
-
-  // Write the shifted RGB values to the output buffer
-  outputBuffer[outputBufferOffset] = newRed;
-  outputBuffer[outputBufferOffset + 1] = newGreen;
-  outputBuffer[outputBufferOffset + 2] = newBlue;
-}
-
-function shiftHue1(
-  red: number,
-  green: number,
-  blue: number,
-  hueShiftDegrees: number,
-  outputBuffer: Uint8Array,
-  outputBufferOffset: number
-) {
-  // Normalize RGB values to the range [0, 1]
-  const normalizedRed = red / 255;
-  const normalizedGreen = green / 255;
-  const normalizedBlue = blue / 255;
-
-  // Find the maximum and minimum values among the normalized RGB values
-  const max = Math.max(normalizedRed, normalizedGreen, normalizedBlue);
-  const min = Math.min(normalizedRed, normalizedGreen, normalizedBlue);
-
-  // Calculate the luminance (lightness) of the color
-  const luminance = (max + min) / 2;
-
-  // Initialize the saturation and hue variables
-  let saturation = 0;
-  let hue = 0;
-
-  // Calculate the saturation if the luminance is not 0 or 1
-  if (luminance !== 0 && luminance !== 1) {
-    saturation = (max - min) / (1 - Math.abs(2 * luminance - 1));
-  }
-
-  // Calculate the hue based on the dominant color channel
-  if (max !== min) {
-    if (max === normalizedRed) {
-      hue = ((normalizedGreen - normalizedBlue) / (max - min) + (normalizedGreen < normalizedBlue ? 6 : 0)) * 60;
-    } else if (max === normalizedGreen) {
-      hue = ((normalizedBlue - normalizedRed) / (max - min) + 2) * 60;
-    } else {
-      hue = ((normalizedRed - normalizedGreen) / (max - min) + 4) * 60;
-    }
-  }
-
-  // Calculate the new hue value by adding the hue shift degrees
-  const newHue = (hue + hueShiftDegrees) % 360;
-
-  // Calculate the chroma (color intensity) based on saturation and luminance
-  const chroma = (1 - Math.abs(2 * luminance - 1)) * saturation;
-
-  // Calculate the intermediate value used for RGB conversion
-  const intermediateValue = chroma * (1 - Math.abs(((newHue / 60) % 2) - 1));
-
-  // Calculate the RGB values based on the hue range
-  let newRed = 0;
-  let newGreen = 0;
-  let newBlue = 0;
-
-  if (newHue >= 0 && newHue < 60) {
-    newRed = chroma;
-    newGreen = intermediateValue;
-  } else if (newHue >= 60 && newHue < 120) {
-    newRed = intermediateValue;
-    newGreen = chroma;
-  } else if (newHue >= 120 && newHue < 180) {
-    newGreen = chroma;
-    newBlue = intermediateValue;
-  } else if (newHue >= 180 && newHue < 240) {
-    newGreen = intermediateValue;
-    newBlue = chroma;
-  } else if (newHue >= 240 && newHue < 300) {
-    newRed = intermediateValue;
-    newBlue = chroma;
-  } else {
-    newRed = chroma;
-    newBlue = intermediateValue;
-  }
-
-  // Calculate the RGB values by adding the luminance minus chroma
-  const luminanceMinusChroma = luminance - chroma / 2;
-  newRed = Math.round((newRed + luminanceMinusChroma) * 255);
-  newGreen = Math.round((newGreen + luminanceMinusChroma) * 255);
-  newBlue = Math.round((newBlue + luminanceMinusChroma) * 255);
-
-  // Write the shifted RGB values to the output buffer
-  outputBuffer[outputBufferOffset] = newRed;
-  outputBuffer[outputBufferOffset + 1] = newGreen;
-  outputBuffer[outputBufferOffset + 2] = newBlue;
 }
 
 export function frameBrighten(info: EGInfo, frame: Frame, amount: number) {

@@ -171,7 +171,7 @@ function withDesaturate(frame: Frame, effect: DesaturateEffect, ctx: StateContex
 
 function withHueShift(frame: Frame, effect: HueShiftEffect, ctx: StateContext, controlPath: string): Frame {
   const value = applyGradientValue(effect.value, `${controlPath}:value`, ctx);
-  return frameHueShift(egInfo, frame, limitRatio(value));
+  return frameHueShift(egInfo, frame, value);
 }
 
 function withRotate(frame: Frame, effect: RotateEffect, ctx: StateContext, controlPath: string): Frame {

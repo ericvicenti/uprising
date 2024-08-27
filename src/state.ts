@@ -425,12 +425,13 @@ function getDashboardState(
     };
     if (item.behavior === 'bounce') {
       const sliderField = sliderFields[item.field];
+      const bounceAmount = sliderField?.bounceAmount ?? DefaultBounceAmount;
       addButton({
         type: 'button',
         ...baseDashboardItem,
         hardwareLabel: getHardwareButtonLabel(),
         label: `Bounce`,
-        buttonLabel: `Bounce ${labelField(fieldPath)} ${sliderField?.bounceAmount ?? DefaultBounceAmount} (${Math.round((sliderField?.bounceDuration ?? DefaultBounceDuration) / 100) / 10} sec)`,
+        buttonLabel: `Bounce ${labelField(fieldPath)} ${bounceAmount > 0 ? `+${bounceAmount}` : bounceAmount} (${Math.round((sliderField?.bounceDuration ?? DefaultBounceDuration) / 100) / 10} sec)`,
         onPress: () => {
           bounceField(dashboardId, item.field);
         },
@@ -565,6 +566,8 @@ function getSliderState(
       return {
         ...baseSlider,
         value: effect.value,
+        min: -180,
+        max: 180,
         onValue: (v) => {
           updateEffect((effect) => ({ ...effect, value: v }));
         },
