@@ -313,10 +313,13 @@ setInterval(() => {
 
 function fetchMedia(scene: Scene, path: string[]): [string[], Scene][] {
   if (scene.type === 'layers') {
-    return [[path, scene], ...scene.layers.flatMap((layer) => fetchMedia(layer.scene, [...path, 'layer', layer.key]))];
+    return [
+      [path, scene],
+      ...scene.layers.flatMap((layer) => fetchMedia(layer.scene, [...path, `layer_${layer.key}`])),
+    ];
   }
   if (scene.type === 'sequence') {
-    return [[path, scene], ...scene.sequence.flatMap((item) => fetchMedia(item.scene, [...path, 'item', item.key]))];
+    return [[path, scene], ...scene.sequence.flatMap((item) => fetchMedia(item.scene, [...path, `item_${item.key}`]))];
   }
   return [[path, scene]];
 }
@@ -325,68 +328,12 @@ function fetchAllScenes(state: MainState): [string[], Scene][] {
   return [...fetchMedia(state.liveScene, ['live']), ...fetchMedia(state.readyScene, ['ready'])];
 }
 
-function fetchActiveScene(scene: Scene, path: string[]): [string[], Scene][] {
-  if (scene.type === 'layers') {
-    return [
-      [path, scene],
-      ...scene.layers.flatMap((layer) => fetchActiveScene(layer.scene, [...path, 'layer', layer.key])),
-    ];
-  }
-  if (scene.type === 'sequence') {
-    const active = getSequenceActiveItem(scene);
-    if (active) {
-      return [[path, scene], ...fetchActiveScene(active.scene, [...path, 'item', active.key])];
-    }
-  }
-  return [[path, scene]];
-}
-
-function fetchAllActiveScene(state: MainState): [string[], Scene][] {
-  return [...fetchActiveScene(state.liveScene, ['live']), ...fetchActiveScene(state.readyScene, ['ready'])];
-}
-
-function getSceneCrawl(media: Scene, path: string[]): Scene | undefined {
-  if (path.length === 0) return media;
-  const [firstKey, ...restPath] = path;
-  if (firstKey === 'layer' && media.type === 'layers') {
-    const layerKey = restPath[0];
-    const layer = media.layers?.find((layer) => layer.key === layerKey);
-    if (!layer) return undefined;
-    return getSceneCrawl(layer.scene, restPath.slice(1));
-  }
-  if (firstKey === 'item' && media.type === 'sequence') {
-    const itemKey = restPath[0];
-    const item = media.sequence?.find((item) => item.key === itemKey);
-    if (!item) return undefined;
-    return getSceneCrawl(item.scene, restPath.slice(1));
-  }
-}
-function getScene(state: MainState, path: string[]): Scene | undefined {
-  const [firstKey, ...restPath] = path;
-  if (firstKey === 'liveScene') return getSceneCrawl(state.liveScene, restPath);
-  if (firstKey === 'readyScene') return getSceneCrawl(state.readyScene, restPath);
-  return undefined;
-}
-
 function matchAllScenes(
   state: MainState,
   filter: (scene: Scene, controlPath: string[]) => boolean
 ): [string[], Scene][] {
   const allMedia = fetchAllScenes(state);
   return allMedia.filter(([controlPath, scene]) => filter(scene, controlPath));
-}
-
-function matchActiveScene(
-  state: MainState,
-  filter: (scene: Scene, controlPath: string[]) => boolean
-): [string[], Scene][] {
-  const allMedia = fetchAllActiveScene(state);
-  return allMedia.filter(([controlPath, scene]) => {
-    if (controlPath[0] === 'liveScene') {
-      return filter(scene, controlPath);
-    }
-    return false;
-  });
 }
 
 // let manualTapBeatCount = 0

@@ -118,7 +118,7 @@ function sceneUpdater(prevScene: Scene, path: string[], updater: (scene: Scene) 
       }),
     };
   }
-  throw new Error('lol not implemented');
+  return prevScene;
 }
 
 export function updateScene(path: string[], updater: (scene: Scene) => Scene) {
