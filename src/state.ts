@@ -7,6 +7,7 @@ import { Dashboard, defaultMainState, Effect, MainState, MainStateSchema, Scene,
 import { MediaIndex, mediaIndex } from './media';
 import { DefaultBounceAmount, DefaultBounceDuration } from './constants';
 import { getSequenceActiveItem } from './eg-main';
+import { mainVideo } from './eg-video-playback';
 
 const [_mainState, setMainState] = state<MainState | null>(null);
 
@@ -33,6 +34,10 @@ function startScene(scene: Scene): Scene {
         scene: startScene(item.scene),
       })),
     };
+  }
+  if (scene.type === 'video') {
+    const player = mainVideo.getPlayer(scene.id);
+    player?.restart();
   }
   return scene;
 }
@@ -73,7 +78,8 @@ export function mainStateUpdate(updater: (state: MainState) => MainState) {
   clearTimeout(mainStateToDiskTimeout);
   setMainState((mainState) => {
     if (!mainState) throw new Error('Cannot update main state, it is not inited yet');
-    return updater(mainState);
+    const newMainState = updater(mainState);
+    return newMainState;
   });
   mainStateToDiskTimeout = setTimeout(() => {
     writeFile(mainStatePath, JSON.stringify(mainState.get())).catch((e) => {
@@ -485,6 +491,10 @@ export function goNext(controlPath: string[]) {
     if (!nextKey) {
       console.warn('goNext: next media not identified');
       return scene;
+    }
+    const nextScene = scene.sequence[nextIndex].scene;
+    if (nextScene) {
+      startScene(nextScene);
     }
     let transitionDuration = 0;
     if (scene.transition?.duration) {
