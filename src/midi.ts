@@ -68,15 +68,14 @@ export function initMidiController() {
     if (liveSlider !== -1) {
       const midiControl = liveDashboard?.sliders[liveSlider];
       if (!midiControl) return;
-      midiControl.slider.onValue(value);
-
+      midiControl.slider.onRatioValue(value);
       return;
     }
     const readySlider = midiReadySliders.indexOf(channel);
     if (readySlider !== -1) {
       const midiControl = readyDashboard?.sliders[readySlider];
       if (!midiControl) return;
-      midiControl.slider.onValue(value);
+      midiControl.slider.onRatioValue(value);
       return;
     }
     console.log('midi event', event);

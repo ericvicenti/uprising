@@ -247,6 +247,7 @@ type BaseDashboardItem = {
 export type DashboardSliderState = {
   value: number;
   onValue: (value: number) => void;
+  onRatioValue: (value: number) => void;
   min?: number;
   max?: number;
   step?: number;
@@ -526,10 +527,30 @@ function getSliderState(
     bounceAmount: sliderField?.bounceAmount,
     bounceDuration: sliderField?.bounceDuration,
     fieldPath,
-    min: 0,
-    max: 1,
     step: 0.01,
   } as const;
+
+  function defineSlider(slider: {
+    onValue: (value: number) => void;
+    value: number;
+    min?: number;
+    max?: number;
+    label?: string;
+    step?: number;
+  }): DashboardSliderState {
+    const min = slider.min ?? 0;
+    const max = slider.max ?? 1;
+    return {
+      ...baseSlider,
+      ...slider,
+      min,
+      max,
+      onRatioValue: (v: number) => {
+        const value = min + v * (max - min);
+        slider.onValue(value);
+      },
+    };
+  }
 
   function updateSliderScene(updater: (scene: Scene) => Scene) {
     updateScene([dashboardId, ...scenePath], updater);
@@ -539,8 +560,7 @@ function getSliderState(
     if (parentScene!?.type !== 'layers') return;
     const layer = parentScene.layers.find((layer) => layer.key === layerId);
     if (!layer) return;
-    return {
-      ...baseSlider,
+    return defineSlider({
       label: `${capitalize(layer.blendMode)} Amount`,
       value: layer.blendAmount,
       onValue: (v) => {
@@ -555,7 +575,7 @@ function getSliderState(
           };
         });
       },
-    };
+    });
   } else if (fieldPath[0] === 'effects') {
     const effectFieldKey = fieldPath[1];
     const effect = getSceneEffects(scene)?.find((effect) => `effect_${effect.key}` === effectFieldKey);
@@ -573,42 +593,37 @@ function getSliderState(
     }
     if (!effect) return;
     if (effect.type === 'hueShift') {
-      return {
-        ...baseSlider,
+      return defineSlider({
         value: effect.value,
         min: -180,
         max: 180,
         onValue: (v) => {
           updateEffect((effect) => ({ ...effect, value: v }));
         },
-      };
+      });
     } else if (effect.type === 'desaturate' && effectField === 'value') {
-      return {
-        ...baseSlider,
+      return defineSlider({
         value: effect.value,
         onValue: (v) => {
           updateEffect((effect) => ({ ...effect, value: v }));
         },
-      };
+      });
     } else if (effect.type === 'colorize' && effectField === 'amount') {
-      return {
-        ...baseSlider,
+      return defineSlider({
         value: effect.amount,
         onValue: (v) => {
           updateEffect((effect) => ({ ...effect, amount: v }));
         },
-      };
+      });
     } else if (effect.type === 'colorize' && effectField === 'saturation') {
-      return {
-        ...baseSlider,
+      return defineSlider({
         value: effect.saturation,
         onValue: (v) => {
           updateEffect((effect) => ({ ...effect, saturation: v }));
         },
-      };
+      });
     } else if (effect.type === 'colorize' && effectField === 'hue') {
-      return {
-        ...baseSlider,
+      return defineSlider({
         value: effect.hue,
         onValue: (v) => {
           updateEffect((effect) => ({ ...effect, hue: v }));
@@ -616,55 +631,49 @@ function getSliderState(
         min: -180,
         max: 180,
         step: 1,
-      };
+      });
     } else if (effect.type === 'darken' && effectField === 'value') {
-      return {
-        ...baseSlider,
+      return defineSlider({
         value: effect.value,
         onValue: (v) => {
           updateEffect((effect) => ({ ...effect, value: v }));
         },
-      };
+      });
     } else if (effect.type === 'brighten' && effectField === 'value') {
-      return {
-        ...baseSlider,
+      return defineSlider({
         value: effect.value,
         onValue: (v) => {
           updateEffect((effect) => ({ ...effect, value: v }));
         },
-      };
+      });
     } else if (effect.type === 'contrast' && effectField === 'value') {
-      return {
-        ...baseSlider,
+      return defineSlider({
         value: effect.value,
         onValue: (v) => {
           updateEffect((effect) => ({ ...effect, value: v }));
         },
-      };
+      });
     } else if (effect.type === 'prism' && effectField === 'offset') {
-      return {
-        ...baseSlider,
+      return defineSlider({
         value: effect.offset,
         onValue: (v) => {
           updateEffect((effect) => ({ ...effect, offset: v }));
         },
-      };
+      });
     } else if (effect.type === 'prism' && effectField === 'slices') {
-      return {
-        ...baseSlider,
+      return defineSlider({
         value: effect.slices,
         onValue: (v) => {
           updateEffect((effect) => ({ ...effect, slices: v }));
         },
-      };
+      });
     } else if (effect.type === 'rotate' && effectField === 'value') {
-      return {
-        ...baseSlider,
+      return defineSlider({
         value: effect.value,
         onValue: (v) => {
           updateEffect((effect) => ({ ...effect, value: v }));
         },
-      };
+      });
     }
   }
 }
