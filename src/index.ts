@@ -230,8 +230,8 @@ function handleSequenceTransitionEnding(state: MainState) {
   matchAllScenes(state, (scene, controlPath) => {
     if (scene.type !== 'sequence') return false;
     const controlPathString = controlPath.join(':');
-    const { transitionEndTime, transition } = scene;
-    if (transitionEndTime && transition) {
+    const { transitionEndTime, transition, nextActiveKey } = scene;
+    if (transitionEndTime && nextActiveKey && transition) {
       // handle video transition ending
       clearTimeout(sequenceTransitionEnds[controlPathString]);
       const now = Date.now();

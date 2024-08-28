@@ -508,7 +508,6 @@ export const models = {
     });
   }),
   control: lookup((controlPath) => {
-    console.log('control', controlPath);
     const path = controlPath.split(':');
     const { scenePath, restPath } = unpackControlPath(path);
     const scene = sceneState.get(scenePath.join(':'));
@@ -2213,7 +2212,7 @@ function GenericSceneSection({
             chromeless
             icon={<LucideIcon icon="Download" />}
             onPress={async () => {
-              console.log('Write Library Item', controlPath, scene);
+              // console.log('Write Library Item', controlPath, scene);
               await writeLibraryItem(controlPath, scene);
               return response(toast('Saved to Library'));
             }}
