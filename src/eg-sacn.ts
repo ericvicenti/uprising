@@ -1,15 +1,15 @@
-import { EGInfo, eg as egConsts } from './eg'
-const { Sender, Receiver } = require('sacn')
+import { EGInfo, eg as egConsts } from './eg';
+const { Sender, Receiver } = require('sacn');
 
-export type Frame = Uint8Array
+export type Frame = Uint8Array;
 
 export function egSacnService(egInfo: EGInfo) {
-  const { egStageRadials, egStageStripLength } = egInfo
-  const sacnEveryOtherStrip = true
-  const pixelsPerUniverse = Math.floor(512 / 3)
-  const universeMultiplier = sacnEveryOtherStrip ? 2 : 1
+  const { egStageRadials, egStageStripLength } = egInfo;
+  const sacnEveryOtherStrip = true;
+  const pixelsPerUniverse = Math.floor(512 / 3);
+  const universeMultiplier = sacnEveryOtherStrip ? 2 : 1;
 
-  const universes = new Map<number, typeof Sender>()
+  const universes = new Map<number, typeof Sender>();
 
   // const Receiver = require('sacn').Receiver
   // const receiveUniverses: number[] = []
@@ -99,70 +99,67 @@ export function egSacnService(egInfo: EGInfo) {
   // }
 
   for (let i = 0; i < egStageRadials; i++) {
-    const startUniverse = i * universeMultiplier * 3 + 1
-    universes.set(startUniverse, new Sender({ universe: startUniverse, reuseAddr: true }))
-    universes.set(startUniverse + 1, new Sender({ universe: startUniverse + 1, reuseAddr: true }))
-    universes.set(startUniverse + 2, new Sender({ universe: startUniverse + 2, reuseAddr: true }))
+    const startUniverse = i * universeMultiplier * 3 + 1;
+    let iface = '10.0.1.39';
+    universes.set(startUniverse, new Sender({ iface, universe: startUniverse, reuseAddr: true }));
+    universes.set(startUniverse + 1, new Sender({ iface, universe: startUniverse + 1, reuseAddr: true }));
+    universes.set(startUniverse + 2, new Sender({ iface, universe: startUniverse + 2, reuseAddr: true }));
   }
 
-  if (process.env.DISABLE_SACN) console.log('SACN OUTPUT DISABLED with DISABLE_SACN env')
+  if (process.env.DISABLE_SACN) console.log('SACN OUTPUT DISABLED with DISABLE_SACN env');
 
   async function sendFrame(frame: Uint8Array) {
-    if (process.env.DISABLE_SACN) return
+    if (process.env.DISABLE_SACN) return;
     const payloads = new Map<
       number, // universe
       Record<
         string, //channel
         number //value
       >
-    >()
+    >();
     for (let stripIndex = 0; stripIndex < egStageRadials; stripIndex++) {
       // console.log('sending', stripIndex + 1)
-      const startUniverse = stripIndex * universeMultiplier * 3 + 1
-      const payloadUniverses: [
-        Record<string, number>,
-        Record<string, number>,
-        Record<string, number>
-      ] = [{}, {}, {}]
+      const startUniverse = stripIndex * universeMultiplier * 3 + 1;
+      const payloadUniverses: [Record<string, number>, Record<string, number>, Record<string, number>] = [{}, {}, {}];
 
       // Change thease magic numberz
       const stripIndexRotated = alignGate(stripIndex, 24, true);
 
       for (let pixelIndex = 0; pixelIndex < egStageStripLength; pixelIndex++) {
-        const sourceIndex = insideOut(pixelIndex)
-        const startByte = (stripIndexRotated * egStageStripLength + sourceIndex) * 3
-        const red = frame[startByte]!
-        const green = frame[startByte + 1]!
-        const blue = frame[startByte + 2]!
-        const startUniverse = ~~((pixelIndex * 3) / 509)
-        const universePayload = payloadUniverses[startUniverse]!
-        const startChannel = (pixelIndex % pixelsPerUniverse) * 3 + 1
-        universePayload[String(startChannel)] = red
-        universePayload[String(startChannel + 1)] = green
-        universePayload[String(startChannel + 2)] = blue
+        const sourceIndex = insideOut(pixelIndex);
+        const startByte = (stripIndexRotated * egStageStripLength + sourceIndex) * 3;
+        const red = frame[startByte]!;
+        const green = frame[startByte + 1]!;
+        const blue = frame[startByte + 2]!;
+        const startUniverse = ~~((pixelIndex * 3) / 509);
+        const universePayload = payloadUniverses[startUniverse]!;
+        const startChannel = (pixelIndex % pixelsPerUniverse) * 3 + 1;
+        universePayload[String(startChannel)] = red;
+        universePayload[String(startChannel + 1)] = green;
+        universePayload[String(startChannel + 2)] = blue;
       }
-      payloads.set(startUniverse, payloadUniverses[0])
-      payloads.set(startUniverse + 1, payloadUniverses[1])
-      payloads.set(startUniverse + 2, payloadUniverses[2])
+      payloads.set(startUniverse, payloadUniverses[0]);
+      payloads.set(startUniverse + 1, payloadUniverses[1]);
+      payloads.set(startUniverse + 2, payloadUniverses[2]);
     }
-    const promises: Promise<void>[] = []
+    const promises: Promise<void>[] = [];
     payloads.forEach((payload, universe) => {
-      const sender = universes.get(universe)
-      promises.push(sender.send({ payload, priority: 102 }))
-    })
-    await Promise.all(promises)
+      const sender = universes.get(universe);
+      promises.push(sender.send({ payload, priority: 102 }));
+    });
+    await Promise.all(promises);
   }
 
   return {
     egInfo,
-    close: () => { },
+    close: () => {},
     sendFrame,
-  }
+  };
 }
 
 /**
  * Reverses each pixels' position in the strips.
- * 
+ *
  * For each radial strip,
  * - The first pixel becomes the last
  * - The last pixel becomes the first
@@ -171,18 +168,18 @@ export function egSacnService(egInfo: EGInfo) {
  * @returns new index of pixel in structure
  */
 function insideOut(pixelIndex: number): number {
-  const radius = pixelIndex % egConsts.egStageStripLength
-  const newRadius = egConsts.egStageStripLength - radius
-  return pixelIndex - radius + newRadius
+  const radius = pixelIndex % egConsts.egStageStripLength;
+  const newRadius = egConsts.egStageStripLength - radius;
+  return pixelIndex - radius + newRadius;
 }
 
 function alignGate(stripIndex: number, rotation: number, mirror = false): number {
   if (mirror) {
-    stripIndex = egConsts.egStageRadials - stripIndex
+    stripIndex = egConsts.egStageRadials - stripIndex;
   }
-  stripIndex += rotation
-  while (stripIndex < 0) stripIndex += egConsts.egStageRadials
-  return stripIndex % egConsts.egStageRadials
+  stripIndex += rotation;
+  while (stripIndex < 0) stripIndex += egConsts.egStageRadials;
+  return stripIndex % egConsts.egStageRadials;
 }
 
 // //   basic test of FPS, sending RGB frames 1 second apart
