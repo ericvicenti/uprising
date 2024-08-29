@@ -85,7 +85,9 @@ const ffmpegQueue = new FFmpegQueue();
 export async function importMediaFile(
   filePath: string,
   workingDirPath: string,
-  onProgress: (progress: string) => void
+  onProgress: (progress: string) => void,
+  idx: number | null,
+  totalLength: number | null
 ): Promise<ImportMetadata> {
   const videoName = basename(filePath);
   console.log('Importing file:', videoName);
