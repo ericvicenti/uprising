@@ -348,6 +348,23 @@ export function frameDarken(info: EGInfo, frame: Frame, amount: number) {
   return outputFrame;
 }
 
+export function frameColorChannels(
+  info: EGInfo,
+  frame: Frame,
+  amountRed: number,
+  amountGreen: number,
+  amountBlue: number
+) {
+  const { frameSize } = info;
+  const outputFrame = new Uint8Array(frameSize);
+  for (let i = 0; i < frameSize; i += 3) {
+    outputFrame[i] = clampColor(frame[i] * (1 + amountRed));
+    outputFrame[i + 1] = clampColor(frame[i + 1] * (1 + amountGreen));
+    outputFrame[i + 2] = clampColor(frame[i + 2] * (1 + amountBlue));
+  }
+  return outputFrame;
+}
+
 function simpleWave(progress: number) {
   // output a wave from 0-1 as input goes from 0-1
   const usableProgress = Math.min(1, Math.max(0, progress));

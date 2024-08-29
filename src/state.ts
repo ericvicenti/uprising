@@ -632,6 +632,30 @@ function getSliderState(
         max: 180,
         step: 1,
       });
+    } else if (effect.type === 'colorChannel' && effectField === 'red') {
+      return defineSlider({
+        value: effect.red,
+        min: -1,
+        onValue: (v) => {
+          updateEffect((effect) => ({ ...effect, red: v }));
+        },
+      });
+    } else if (effect.type === 'colorChannel' && effectField === 'green') {
+      return defineSlider({
+        value: effect.green,
+        min: -1,
+        onValue: (v) => {
+          updateEffect((effect) => ({ ...effect, green: v }));
+        },
+      });
+    } else if (effect.type === 'colorChannel' && effectField === 'blue') {
+      return defineSlider({
+        value: effect.blue,
+        min: -1,
+        onValue: (v) => {
+          updateEffect((effect) => ({ ...effect, blue: v }));
+        },
+      });
     } else if (effect.type === 'darken' && effectField === 'value') {
       return defineSlider({
         value: effect.value,
@@ -748,6 +772,14 @@ export function createBlankEffect(type: Effect['type']): Effect {
       amount: 0,
       saturation: 1,
       hue: 180,
+    };
+  if (type === 'colorChannel')
+    return {
+      key: randomUUID(),
+      type: 'colorChannel',
+      red: 0,
+      green: 0,
+      blue: 0,
     };
   if (type === 'darken')
     return {

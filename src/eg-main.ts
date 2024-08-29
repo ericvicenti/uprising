@@ -16,9 +16,11 @@ import {
   frameContrast,
   frameRotate,
   framePrism,
+  frameColorChannels,
 } from './eg-tools';
 import {
   BrightenEffect,
+  ColorChannelEffect,
   ColorizeEffect,
   ColorScene,
   ContrastEffect,
@@ -174,6 +176,13 @@ function withHueShift(frame: Frame, effect: HueShiftEffect, ctx: StateContext, c
   return frameHueShift(egInfo, frame, value);
 }
 
+function withColorChannel(frame: Frame, effect: ColorChannelEffect, ctx: StateContext, controlPath: string): Frame {
+  const red = applyGradientValue(effect.red, `${controlPath}:red`, ctx);
+  const green = applyGradientValue(effect.green, `${controlPath}:green`, ctx);
+  const blue = applyGradientValue(effect.blue, `${controlPath}:blue`, ctx);
+  return frameColorChannels(egInfo, frame, red, green, blue);
+}
+
 function withRotate(frame: Frame, effect: RotateEffect, ctx: StateContext, controlPath: string): Frame {
   const value = applyGradientValue(effect.value, `${controlPath}:value`, ctx);
   return frameRotate(egInfo, frame, value);
@@ -207,6 +216,7 @@ function withDarken(frame: Frame, effect: DarkenEffect, ctx: StateContext, contr
 function withEffect(frame: Frame, effect: Effect, ctx: StateContext, controlPath: string): Frame {
   if (effect.type === 'contrast') return withContrast(frame, effect, ctx, controlPath);
   if (effect.type === 'colorize') return withColorize(frame, effect, ctx, controlPath);
+  if (effect.type === 'colorChannel') return withColorChannel(frame, effect, ctx, controlPath);
   if (effect.type === 'desaturate') return withDesaturate(frame, effect, ctx, controlPath);
   if (effect.type === 'hueShift') return withHueShift(frame, effect, ctx, controlPath);
   if (effect.type === 'invert') return withInvert(frame, effect, ctx, controlPath);

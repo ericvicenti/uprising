@@ -74,6 +74,7 @@ import {
 } from './state';
 import {
   BrightenEffect,
+  ColorChannelEffect,
   ColorizeEffect,
   ColorScene,
   ContrastEffect,
@@ -1240,6 +1241,7 @@ function GlobalEffectsScreen({
 const EffectTypes: Readonly<{ label: string; key: Effect['type'] }[]> = [
   { key: 'desaturate', label: 'Desaturate' },
   { key: 'colorize', label: 'Colorize' },
+  { key: 'colorChannel', label: 'Color Channels' },
   { key: 'invert', label: 'Invert' },
   { key: 'hueShift', label: 'Hue Shift' },
   { key: 'brighten', label: 'Brighten' },
@@ -1327,6 +1329,9 @@ function EffectScreen({
   }
   if (effect?.type === 'colorize') {
     controls = <EffectColorizeControls effect={effect} {...effectProps} />;
+  }
+  if (effect?.type === 'colorChannel') {
+    controls = <EffectColorChannelControls effect={effect} {...effectProps} />;
   }
   return (
     <NarrowScrollView>
@@ -1534,6 +1539,45 @@ function EffectColorizeControls({ effect, onEffect, sliderFields, scenePath }: E
         scenePath={scenePath}
         fieldPath={['effects', `effect_${effect.key}`, 'saturation']}
         onValueChange={(v) => onEffect((e) => ({ ...e, saturation: v }))}
+        sliderFields={sliderFields}
+      />
+    </YStack>
+  );
+}
+
+function EffectColorChannelControls({
+  effect,
+  onEffect,
+  sliderFields,
+  scenePath,
+}: EffectControlsProps<ColorChannelEffect>) {
+  return (
+    <YStack>
+      <GradientSlider
+        label="Red Channel Adjust"
+        value={effect.red}
+        scenePath={scenePath}
+        min={-1}
+        fieldPath={['effects', `effect_${effect.key}`, 'red']}
+        onValueChange={(v) => onEffect((e) => ({ ...e, red: v }))}
+        sliderFields={sliderFields}
+      />
+      <GradientSlider
+        label="Green Channel Adjust"
+        value={effect.green}
+        scenePath={scenePath}
+        min={-1}
+        fieldPath={['effects', `effect_${effect.key}`, 'green']}
+        onValueChange={(v) => onEffect((e) => ({ ...e, green: v }))}
+        sliderFields={sliderFields}
+      />
+      <GradientSlider
+        label="Blue Channel Adjust"
+        value={effect.blue}
+        scenePath={scenePath}
+        min={-1}
+        fieldPath={['effects', `effect_${effect.key}`, 'blue']}
+        onValueChange={(v) => onEffect((e) => ({ ...e, blue: v }))}
         sliderFields={sliderFields}
       />
     </YStack>

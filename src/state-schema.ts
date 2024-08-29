@@ -44,6 +44,15 @@ const colorizeEffectSchema = z.object({
 });
 export type ColorizeEffect = z.infer<typeof colorizeEffectSchema>;
 
+const colorChannelEffectSchema = z.object({
+  key: z.string(),
+  type: z.literal('colorChannel'),
+  red: z.number(), // -1 to 1
+  green: z.number(), // -1 to 1
+  blue: z.number(), // -1 to 1
+});
+export type ColorChannelEffect = z.infer<typeof colorChannelEffectSchema>;
+
 const brightenEffectSchema = z.object({
   key: z.string(),
   type: z.literal('brighten'),
@@ -104,6 +113,7 @@ const effectSchema = z.discriminatedUnion('type', [
   rotateEffectSchema,
   contrastEffectSchema,
   prismEffectSchema,
+  colorChannelEffectSchema,
 ]);
 export type Effect = z.infer<typeof effectSchema>;
 
