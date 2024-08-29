@@ -109,46 +109,98 @@ export const importState = _importState;
 export async function importMedia(url: string) {
   const id = randomUUID();
   setImportState((state) => {
-    return { importing: [...(state?.importing || []), { url, id, state: 'downloading' }] };
+    return { importing: [...(state?.importing || []), { url, id, state: 'initializing' }] };
   });
-  const { info, mediaFile } = await downloadFile(url, id);
-  const setProgressState = (progressState: string) => {
+
+  if (url.startsWith('DIR:')) {
+    console.log('importing dir', url);
+    const dirPath = url.slice(4);
+    const files = await readdir(dirPath);
+    const mp4Files = files.filter((file) => file.endsWith('.mp4'));
+
+    const importResults = await Promise.all(
+      mp4Files.map(async (file, idx) => {
+        const filePath = join(dirPath, file);
+        console.log(`importing file ${idx}/${mp4Files.length}`, filePath);
+        const setProgressState = (progressState: string) => {
+          setImportState((state) => {
+            return {
+              importing:
+                state?.importing.map((importItem) => {
+                  if (importItem.id === id) {
+                    return { ...importItem, state: progressState };
+                  }
+                  return importItem;
+                }) || [],
+            };
+          });
+        };
+
+        const importResult = await importMediaFile(filePath, importingPath, setProgressState, idx, mp4Files.length);
+        setProgressState('Finalizing');
+        await rename(`${importingPath}/${importResult.egFramesFile}`, `${mediaPath}/${id}.eg.data`);
+
+        updateMediaIndex((index) => {
+          return {
+            ...index,
+            files: [
+              ...(index?.files || []),
+              {
+                id,
+                sourceUrl: url,
+                title: file,
+                egFramesFile: `${id}.eg.data`,
+                importerMetadata: importResult,
+                downloadMetadata: null,
+              },
+            ],
+          };
+        });
+
+        return importResult;
+      })
+    );
+
+    console.log('All files imported:', importResults);
+  } else {
     setImportState((state) => {
+      return { importing: [...(state?.importing || []), { url, id, state: 'downloading' }] };
+    });
+    const { info, mediaFile } = await downloadFile(url, id);
+    const setProgressState = (progressState: string) => {
+      setImportState((state) => {
+        return {
+          importing:
+            state?.importing.map((importItem) => {
+              if (importItem.id === id) {
+                return { ...importItem, state: progressState };
+              }
+              return importItem;
+            }) || [],
+        };
+      });
+    };
+    const importResult = await importMediaFile(`${importingPath}/${mediaFile}`, importingPath, setProgressState);
+    setProgressState('Finalizing');
+    await rename(`${importingPath}/${importResult.egFramesFile}`, `${mediaPath}/${id}.eg.data`);
+
+    updateMediaIndex((index) => {
       return {
-        importing:
-          state?.importing.map((importItem) => {
-            if (importItem.id === id) {
-              return { ...importItem, state: progressState };
-            }
-            return importItem;
-          }) || [],
+        ...index,
+        files: [
+          ...(index?.files || []),
+          {
+            id,
+            sourceUrl: url,
+            title: info.fulltitle || info.title || url,
+            egFramesFile: `${id}.eg.data`,
+            importerMetadata: importResult,
+            downloadMetadata: info,
+          },
+        ],
       };
     });
-  };
-  const importResult = await importMediaFile(`${importingPath}/${mediaFile}`, importingPath, setProgressState);
-  setProgressState('Finalizing');
-  await rename(`${importingPath}/${importResult.egFramesFile}`, `${mediaPath}/${id}.eg.data`);
-
-  updateMediaIndex((index) => {
-    return {
-      ...index,
-      files: [
-        ...(index?.files || []),
-        {
-          id,
-          sourceUrl: url,
-          title: info.fulltitle || info.title || url,
-          egFramesFile: `${id}.eg.data`,
-          importerMetadata: importResult,
-          downloadMetadata: info,
-        },
-      ],
-    };
-  });
-
-  setImportState((state) => {
-    return { importing: state?.importing.filter((importItem) => importItem.id !== id) || [] };
-  });
+  }
 }
 
 fs.mkdirSync(importingPath, { recursive: true });

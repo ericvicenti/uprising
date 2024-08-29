@@ -52,80 +52,102 @@ type ImportMetadata = {
   sourceFileSize: number;
 };
 
+type Task = () => Promise<void>;
+
+class FFmpegQueue {
+  private queue: Task[] = [];
+  private running = false;
+
+  async add(task: Task) {
+    this.queue.push(task);
+    if (!this.running) {
+      this.processQueue();
+    }
+  }
+
+  private async processQueue() {
+    if (this.queue.length === 0) {
+      this.running = false;
+      return;
+    }
+
+    this.running = true;
+    const task = this.queue.shift();
+    if (task) {
+      await task();
+    }
+    this.processQueue();
+  }
+}
+
+const ffmpegQueue = new FFmpegQueue();
+
 export async function importMediaFile(
   filePath: string,
   workingDirPath: string,
   onProgress: (progress: string) => void
 ): Promise<ImportMetadata> {
   const videoName = basename(filePath);
+  console.log('Importing file:', videoName);
 
-  // console.log('Importing file:', videoName);
   onProgress('Calculating Checksum');
   const fileSha256 = await calculateChecksum(filePath);
   const audioFileNameRelative = `${fileSha256}.mp3`;
   const audioFilePath = join(workingDirPath, audioFileNameRelative);
-  // if (
-  //   prevDbFile &&
-  //   prevDbFile.fileSha256 === fileSha256 &&
-  //   prevDbFile.importerVersion === importerVersion &&
-  //   // existsSync(audioFilePath) &&
-  //   existsSync(join(outputDir, prevDbFile.egFramesFile))
-  // ) {
-  //   console.log('File already imported, output exists, checksum matches. skipping...')
-  //   return prevDbFile
-  // }
+
   const fileInfo = await stat(filePath);
-  // console.log('File size:', fileInfo.size);
   let audioFile: string | null;
   const egFramesFile = `${fileSha256}.eg.data`;
+
   try {
     onProgress('Extracting audio');
     await extractAudioToMP3(filePath, audioFilePath);
-
     audioFile = audioFileNameRelative;
   } catch (e) {
-    // console.error('Failed to extract audio for ' + filePath, e);
+    console.error('Failed to extract audio for ' + filePath, e);
     audioFile = null;
   }
-  // return new Promise<DBFile>((resolve, reject) => {
+
   onProgress('Gathering Metadata');
-  const dimensionsProbeData = await exec(
-    ffprobePath,
-    ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'csv=p=0:s=x', filePath],
-    { stdio: ['ignore', 'ignore', 'ignore'] }
-  );
+  const dimensionsProbeData = await execPromise(ffprobePath, [
+    '-v',
+    'error',
+    '-select_streams',
+    'v:0',
+    '-show_entries',
+    'stream=width,height',
+    '-of',
+    'csv=p=0:s=x',
+    filePath,
+  ]);
   const dimensions = dimensionsProbeData.trim().split('x').map(Number);
   let width = dimensions[0];
   let height = dimensions[1];
 
-  // count frames:
-  const frameCountProbeData = await exec(
-    ffprobePath,
-    [
-      '-v',
-      'error',
-      '-count_frames',
-      '-select_streams',
-      'v:0',
-      '-show_entries',
-      'stream=nb_read_frames',
-      '-of',
-      'default=noprint_wrappers=1:nokey=1',
-      filePath,
-    ],
-    { stdio: ['ignore', 'ignore', 'ignore'] }
-  );
-
+  const frameCountProbeData = await execPromise(ffprobePath, [
+    '-v',
+    'error',
+    '-count_frames',
+    '-select_streams',
+    'v:0',
+    '-show_entries',
+    'stream=nb_read_frames',
+    '-of',
+    'default=noprint_wrappers=1:nokey=1',
+    filePath,
+  ]);
   const frameCount = Number(frameCountProbeData.trim());
 
-  const durationProbeData = await exec(
-    ffprobePath,
-    ['-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', filePath],
-    { stdio: ['ignore', 'ignore', 'ignore'] }
-  );
+  const durationProbeData = await execPromise(ffprobePath, [
+    '-v',
+    'error',
+    '-show_entries',
+    'format=duration',
+    '-of',
+    'default=noprint_wrappers=1:nokey=1',
+    filePath,
+  ]);
   const durationInSeconds = parseFloat(durationProbeData.trim());
-  // console.log(`Video duration: ${durationInSeconds} seconds`);
-  // console.log(`Video dimensions: ${width}x${height}`);
 
   let squareFilePath = filePath;
   if (width !== height) {
@@ -134,21 +156,16 @@ export async function importMediaFile(
     const cropY = (height - newDimension) / 2;
     squareFilePath = join(workingDirPath, `${fileSha256}.square.mp4`);
     onProgress('Cropping video');
-    await exec(
-      ffmpegPath,
-      [
-        '-i',
-        filePath,
-        '-vf',
-        `crop=${newDimension}:${newDimension}:${cropX}:${cropY}`,
-        '-y', // overwrite
-        '-c:a', // copy audio
-        'copy',
-        squareFilePath,
-      ],
-      { stdio: ['ignore', 'ignore', 'ignore'] }
-    );
-    // console.log('Cropped video to square:', squareFilePath);
+    await execPromise(ffmpegPath, [
+      '-i',
+      filePath,
+      '-vf',
+      `crop=${newDimension}:${newDimension}:${cropX}:${cropY}`,
+      '-y',
+      '-c:a',
+      'copy',
+      squareFilePath,
+    ]);
     width = newDimension;
     height = newDimension;
   }
@@ -165,23 +182,6 @@ export async function importMediaFile(
     });
   });
 
-  // // CREATE A TEST IMAGE FOR EG STAGE PIXELS
-  // new Jimp(width, height, '#FFFFFF', (err, image) => {
-  //   if (err) throw err
-  //   egStagePixelMap.forEach((pixel, index) => {
-  //     image.setPixelColor(
-  //       Jimp.cssColorToHex('#000000'),
-  //       // Jimp.rgbaToInt(r, g, b, a),
-  //       pixel.x,
-  //       pixel.y
-  //     )
-  //   })
-  //   image.write('./test-output/eg.png', (err) => {
-  //     if (err) throw err
-  //     console.log('Image created and saved!')
-  //   })
-  // })
-
   const format = 'rawvideo';
   const pixelBytes = 3; // RGB
   const frameSize = width * height * pixelBytes;
@@ -193,150 +193,110 @@ export async function importMediaFile(
 
   try {
     unlinkSync(outputDataFile);
-    // console.log('removed existing file ', outputDataFile);
   } catch (e) {
-    // console.warn('Failed to delete existing file', outputDataFile)
+    console.warn('Failed to delete existing file', outputDataFile);
   }
 
   writeFileSync(outputDataFile, Buffer.alloc(0));
 
-  const ffmpeg = spawn(ffmpegPath, [
-    '-i',
-    squareFilePath,
-    '-f',
-    format,
-    '-vf',
-    `scale=${width}:${height}`,
-    '-pix_fmt',
-    'rgb24',
-    '-',
-  ]);
+  return new Promise<ImportMetadata>((resolve, reject) => {
+    ffmpegQueue.add(async () => {
+      const ffmpeg = spawn(ffmpegPath, [
+        '-i',
+        squareFilePath,
+        '-f',
+        format,
+        '-vf',
+        `scale=${width}:${height}`,
+        '-pix_fmt',
+        'rgb24',
+        '-',
+      ]);
 
-  ffmpeg.stdout.on('data', (chunk: Buffer) => {
-    videoBuffer = Buffer.concat([videoBuffer, chunk]);
+      ffmpeg.stdout.on('data', (chunk: Buffer) => {
+        videoBuffer = Buffer.concat([videoBuffer, chunk]);
 
-    while (videoBuffer.length >= frameSize) {
-      const frame = videoBuffer.slice(0, frameSize);
-      processFrame(frame);
-      videoBuffer = videoBuffer.slice(frameSize);
-    }
-  });
-
-  // ffmpeg.stderr.on('data', (data) => {
-  //   console.error(`stderr: ${data}`)
-  // });
-  const startTime = Date.now();
-
-  const frameOutputBuffer = new Uint8Array(egStageMap.length * 3);
-
-  const fsWriter = createWriteStream(outputDataFile, {
-    encoding: 'binary',
-  });
-
-  // const compressionWriter = zlib.createBrotliCompress({
-  //   params: {
-  //     [zlib.constants.BROTLI_PARAM_MODE]: zlib.constants.BROTLI_MODE_GENERIC,
-  //     [zlib.constants.BROTLI_PARAM_QUALITY]: zlib.constants.BROTLI_MAX_QUALITY,
-  //   },
-  // })
-
-  // compressionWriter.pipe(fsWriter)
-  return await new Promise<ImportMetadata>((resolve, reject) => {
-    ffmpeg.on('close', (code: string | number) => {
-      // console.log(`ffmpeg process exited with code ${code}`);
-      const endTime = Date.now();
-      const duration = endTime - startTime;
-      const conversionDuration = duration / 1000;
-      // console.log('Done in ' + durationInSeconds + ' seconds');
-      // compressionWriter.close()
-      fsWriter.close();
-      resolve({
-        fileSha256,
-        width,
-        height,
-        conversionDuration,
-        frameCount,
-        duration: durationInSeconds,
-        completeTime: endTime,
-        videoName,
-        filePath,
-        egFramesFile,
-        audioFile,
-        importerVersion,
-        sourceFileSize: fileInfo.size,
+        while (videoBuffer.length >= frameSize) {
+          const frame = videoBuffer.slice(0, frameSize);
+          processFrame(frame);
+          videoBuffer = videoBuffer.slice(frameSize);
+        }
       });
+
+      ffmpeg.stderr.on('data', (data) => {
+        console.error(`stderr: ${data}`);
+      });
+
+      const startTime = Date.now();
+
+      const frameOutputBuffer = new Uint8Array(egStageMap.length * 3);
+
+      const fsWriter = createWriteStream(outputDataFile, {
+        encoding: 'binary',
+      });
+
+      ffmpeg.on('close', (code: string | number) => {
+        if (code !== 0) {
+          reject(new Error(`ffmpeg process exited with code ${code}`));
+          return;
+        }
+        const endTime = Date.now();
+        const duration = endTime - startTime;
+        const conversionDuration = duration / 1000;
+        fsWriter.close();
+        resolve({
+          fileSha256,
+          width,
+          height,
+          conversionDuration,
+          frameCount,
+          duration: durationInSeconds,
+          completeTime: endTime,
+          videoName,
+          filePath,
+          egFramesFile,
+          audioFile,
+          importerVersion,
+          sourceFileSize: fileInfo.size,
+        });
+      });
+
+      ffmpeg.on('error', (err) => {
+        reject(err);
+      });
+
+      function appendFile(data: Uint8Array) {
+        const buffer = Buffer.from(data.buffer, data.byteOffset, data.byteLength);
+        fsWriter.write(buffer);
+      }
+
+      function processFrame(frame: Buffer) {
+        let pixelStart = 0;
+        let outputStart = 0;
+        egStagePixelMap.forEach((pixel, index) => {
+          pixelStart = pixel.x * pixelBytes + pixel.y * width * pixelBytes;
+          outputStart = index * 3;
+          frameOutputBuffer[outputStart] = frame[pixelStart]; // r
+          frameOutputBuffer[outputStart + 1] = frame[pixelStart + 1]; // g
+          frameOutputBuffer[outputStart + 2] = frame[pixelStart + 2]; // b
+        });
+
+        appendFile(frameOutputBuffer);
+      }
     });
   });
-  // async function writeEGFrameToImage(frameBuffer: Uint8Array) {
-  //   const image = await Jimp.create(width, height, '#000000')
-  //   egStagePixelMap.forEach((pixel, index) => {
-  //     const startByte = index * 3
-  //     image.setPixelColor(
-  //       Jimp.rgbaToInt(
-  //         frameBuffer[startByte],
-  //         frameBuffer[startByte + 1],
-  //         frameBuffer[startByte + 2],
-  //         255
-  //       ),
-  //       pixel.x,
-  //       pixel.y
-  //     )
-  //   })
-  //   await image.write('./test-output/eg-frame.png')
-  // }
+}
 
-  // async function writeVideoFrameToImage(frameBuffer: Uint8Array) {
-  //   const image = await Jimp.create(width, height, '#FFFFFF')
-  //   for (let x = 0; x < width; x += 1) {
-  //     for (let y = 0; y < height; y += 1) {
-  //       const startByte = x * 3 + y * width * 3
-  //       image.setPixelColor(
-  //         Jimp.rgbaToInt(
-  //           frameBuffer[startByte],
-  //           frameBuffer[startByte + 1],
-  //           frameBuffer[startByte + 2],
-  //           255
-  //         ),
-  //         x,
-  //         y
-  //       )
-  //     }
-  //   }
-  //   await image.write('./test-output/video-frame.png')
-  // }
-
-  function appendFile(data: Uint8Array) {
-    const buffer = Buffer.from(data.buffer, data.byteOffset, data.byteLength);
-    // compressionWriter.write(buffer)
-    fsWriter.write(buffer);
-  }
-
-  function processFrame(frame: Buffer) {
-    let pixelStart = 0;
-    let outputStart = 0;
-    egStagePixelMap.forEach((pixel, index) => {
-      pixelStart = pixel.x * pixelBytes + pixel.y * width * pixelBytes;
-      outputStart = index * 3;
-      frameOutputBuffer[outputStart] = frame[pixelStart]; // r
-      frameOutputBuffer[outputStart + 1] = frame[pixelStart + 1]; // g
-      frameOutputBuffer[outputStart + 2] = frame[pixelStart + 2]; //b
+function execPromise(command: string, args: string[]): Promise<string> {
+  return new Promise((resolve, reject) => {
+    exec(command, args, (error: any, stdout: any, stderr: any) => {
+      if (error) {
+        reject(error);
+      } else {
+        resolve(stdout);
+      }
     });
-
-    // writeVideoFrameToImage(frame).then(() => {
-    //   console.log('wrote video frame')
-    // })
-
-    // writeEGFrameToImage(frameOutputBuffer)
-    //   .then(() => {
-    //     console.log('wrote image')
-    //   })
-    //   .catch((err) => {
-    //     console.error('error writing image', err)
-    //   })
-    //   .finally(() => {})
-
-    appendFile(frameOutputBuffer);
-  }
+  });
 }
 
 function calculateChecksum(filePath: string): Promise<string> {
