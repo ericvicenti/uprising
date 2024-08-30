@@ -100,10 +100,9 @@ export function egSacnService(egInfo: EGInfo) {
 
   for (let i = 0; i < egStageRadials; i++) {
     const startUniverse = i * universeMultiplier * 3 + 1;
-    let iface = '10.0.1.39';
-    universes.set(startUniverse, new Sender({ iface, universe: startUniverse, reuseAddr: true }));
-    universes.set(startUniverse + 1, new Sender({ iface, universe: startUniverse + 1, reuseAddr: true }));
-    universes.set(startUniverse + 2, new Sender({ iface, universe: startUniverse + 2, reuseAddr: true }));
+    universes.set(startUniverse, new Sender({ universe: startUniverse, reuseAddr: true }));
+    universes.set(startUniverse + 1, new Sender({ universe: startUniverse + 1, reuseAddr: true }));
+    universes.set(startUniverse + 2, new Sender({ universe: startUniverse + 2, reuseAddr: true }));
   }
 
   if (process.env.DISABLE_SACN) console.log('SACN OUTPUT DISABLED with DISABLE_SACN env');
