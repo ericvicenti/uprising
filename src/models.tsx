@@ -1,42 +1,33 @@
 import { goBack, navigate, StackScreen } from '@rise-tools/kit-react-navigation/server';
-import { AnimatedProgress, SmoothSlider } from '@rise-tools/kit/server';
+import { SmoothSlider } from '@rise-tools/kit/server';
 import {
   BottomSheet,
   BottomSheetCloseButton,
   BottomSheetTriggerButton,
   Button,
   DraggableFlatList,
-  Group,
-  GroupItem,
-  Heading,
   InputField,
-  Label,
   LucideIcon,
   openURL,
   RiseForm,
   ScrollView,
-  Separator,
   SheetScrollView,
   SizableText,
   Spinner,
   SubmitButton,
-  Switch,
-  SwitchThumb,
   Text,
   toast,
   View,
   XStack,
   YStack,
 } from '@rise-tools/kitchen-sink/server';
-import { createComponentDefinition, ref, response } from '@rise-tools/react';
+import { ref, response } from '@rise-tools/react';
 import { lookup, ValueModel, view } from '@rise-tools/server';
 import { execFileSync } from 'child_process';
 import { randomUUID } from 'crypto';
-import { hslToHex } from './color';
-import { DefaultBounceAmount, DefaultBounceDuration, DefaultSmoothing, DefaultTransitionDuration } from './constants';
+import { DefaultBounceAmount, DefaultBounceDuration, DefaultSmoothing } from './constants';
 import { mainVideo } from './eg-video-playback';
-import { deleteLibraryItem, getLibraryItem, libraryIndex, renameLibraryItem, writeLibraryItem } from './library';
-import { EditTransitionForm } from './ui/transition';
+import { getLibraryItem, libraryIndex, writeLibraryItem } from './library';
 import {
   deleteMediaFile,
   duplicateFile,
@@ -49,10 +40,6 @@ import {
   renameMediaFile,
 } from './media';
 import {
-  addBounceToDashboard,
-  addSliderToDashboard,
-  bounceTimes,
-  createBlankEffect,
   createBlankScene,
   dashboards,
   DashboardSliderState,
@@ -65,50 +52,31 @@ import {
   mainStateUpdate,
   sceneState,
   sliderFields,
-  startAutoTransition,
   updateScene,
 } from './state';
 import {
-  BrightenEffect,
-  ColorChannelEffect,
-  ColorizeEffect,
   ColorScene,
-  ContrastEffect,
-  DarkenEffect,
   Dashboard,
   DashboardItem,
   DefaultTransition,
-  DesaturateEffect,
   Effect,
-  HueShiftEffect,
   Layer,
   LayersScene,
   OffScene,
-  PrismEffect,
-  RotateEffect,
   Scene,
   SequenceItem,
   SequenceScene,
   SliderFields,
-  Transition,
-  TransitionState,
   VideoScene,
 } from './state-schema';
-import { getScreenTitle, JSXElement, NarrowScrollView, Section } from './ui/common';
-import { GradientFieldDropdown, GradientSlider } from './ui/gradient';
-import { NumericField, SwitchField } from './ui/fields';
 import { ButtonGroup } from './ui/button-group';
+import { getScreenTitle, JSXElement, NarrowScrollView, Section } from './ui/common';
 import { EffectScreen, EffectsScreen, GlobalEffectsScreen } from './ui/effects';
+import { NumericField, SwitchField } from './ui/fields';
+import { GradientFieldDropdown, GradientSlider } from './ui/gradient';
 import { HomeScreen } from './ui/home';
 import { LibraryItemScreen } from './ui/library';
-
-function isEqual(a: any, b: any) {
-  return JSON.stringify(a) === JSON.stringify(b);
-}
-
-function compareView<V>(loader: (get: <V>(model: ValueModel<V>) => V | undefined) => V) {
-  return view<V>(loader, { compare: isEqual });
-}
+import { EditTransitionForm } from './ui/transition';
 
 export const models = {
   home: compareView((get) => {
@@ -536,6 +504,10 @@ export const models = {
     });
   }),
 };
+
+function compareView<V>(loader: (get: <V>(model: ValueModel<V>) => V | undefined) => V) {
+  return view<V>(loader, { compare: isEqual });
+}
 
 function DraggableItem({ children }: { children?: JSXElement }) {
   return (
@@ -1615,4 +1587,9 @@ function SelectDropdown<Options extends Readonly<{ label: string; key: string }[
       </SheetScrollView>
     </BottomSheet>
   );
+}
+
+// LOL, DONT LOOK AT THIS. very embarassing. Ask Eric why we do it this way (hopefully he remembers)
+function isEqual(a: any, b: any) {
+  return JSON.stringify(a) === JSON.stringify(b);
 }
