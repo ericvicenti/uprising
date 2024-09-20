@@ -300,7 +300,6 @@ function EffectColorizeControls({ effect, onEffect, sliderFields, scenePath }: E
         onValueChange={(v) => onEffect((e) => ({ ...e, hue: v }))}
         sliderFields={sliderFields}
       />
-
       <GradientSlider
         label="Saturation"
         value={effect.saturation}

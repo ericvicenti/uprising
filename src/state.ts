@@ -9,9 +9,7 @@ import { DefaultBounceAmount, DefaultBounceDuration } from './constants';
 import { getSequenceActiveItem } from './eg-main';
 import { mainVideo } from './eg-video-playback';
 
-const [_mainState, setMainState] = state<MainState | null>(null);
-
-export const mainState = _mainState;
+export const [mainState, setMainState] = state<MainState | null>(null);
 
 function startScene(scene: Scene): Scene {
   if (scene.type === 'layers') {

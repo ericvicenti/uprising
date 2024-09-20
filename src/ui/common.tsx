@@ -1,4 +1,4 @@
-import { ScrollView, YStack } from '@rise-tools/kitchen-sink/server';
+import { Heading, ScrollView, YStack } from '@rise-tools/kitchen-sink/server';
 import { createComponentDefinition } from '@rise-tools/react/jsx-runtime';
 import { Scene } from '../state-schema';
 
@@ -13,6 +13,15 @@ export function NarrowScrollView({ children }: { children?: JSXElement }) {
     </ScrollView>
   );
 }
+export function Section({ title, children }: { title?: string; children?: JSXElement }) {
+  return (
+    <YStack gap="$4" padding="$4">
+      {title ? <Heading>{title}</Heading> : null}
+      {children}
+    </YStack>
+  );
+}
+
 export function getScreenTitle(scene: Scene | null | undefined, controlPath: string[]): string {
   if (scene?.label) return scene.label;
   if (scene?.type === 'video') return 'Video';

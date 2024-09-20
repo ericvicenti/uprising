@@ -36,6 +36,7 @@ import { hslToHex } from './color';
 import { DefaultBounceAmount, DefaultBounceDuration, DefaultSmoothing, DefaultTransitionDuration } from './constants';
 import { mainVideo } from './eg-video-playback';
 import { deleteLibraryItem, getLibraryItem, libraryIndex, renameLibraryItem, writeLibraryItem } from './library';
+import { EditTransitionForm } from './ui/transition';
 import {
   deleteMediaFile,
   duplicateFile,
@@ -93,11 +94,13 @@ import {
   TransitionState,
   VideoScene,
 } from './state-schema';
-import { getScreenTitle, JSXElement, NarrowScrollView } from './ui/common';
+import { getScreenTitle, JSXElement, NarrowScrollView, Section } from './ui/common';
 import { GradientFieldDropdown, GradientSlider } from './ui/gradient';
 import { NumericField, SwitchField } from './ui/fields';
 import { ButtonGroup } from './ui/button-group';
 import { EffectScreen, EffectsScreen, GlobalEffectsScreen } from './ui/effects';
+import { HomeScreen } from './ui/home';
+import { LibraryItemScreen } from './ui/library';
 
 function isEqual(a: any, b: any) {
   return JSON.stringify(a) === JSON.stringify(b);
@@ -111,77 +114,7 @@ export const models = {
   home: compareView((get) => {
     const state = get(mainState);
     if (!state) return <Spinner />;
-    return (
-      <NarrowScrollView>
-        <YStack gap="$4" padding="$4">
-          <XStack gap="$4">
-            <YStack f={1} gap="$2">
-              <Button flex={1} onPress={navigate('control/live')} height={80}>
-                Live: {getScreenTitle(state.liveScene, ['live'])}
-              </Button>
-              <Button chromeless icon={<LucideIcon icon="LayoutDashboard" />} onPress={navigate('dashboard/live')}>
-                Live Dashboard
-              </Button>
-            </YStack>
-            <YStack f={1} gap="$2">
-              <Button flex={1} onPress={navigate('control/ready')}>
-                Ready: {getScreenTitle(state.readyScene, ['ready'])}
-              </Button>
-              <Button chromeless icon={<LucideIcon icon="LayoutDashboard" />} onPress={navigate('dashboard/ready')}>
-                Ready Dashboard
-              </Button>
-            </YStack>
-          </XStack>
-          <AutoTransitionProgress transitionState={state.transitionState} transition={state.transition} />
-          <XStack jc="center">
-            <YStack gap="$2">
-              <Button
-                height={80}
-                theme="green"
-                paddingHorizontal="$6"
-                onPress={() => {
-                  startAutoTransition();
-                }}
-                disabled={state.transitionState.manual !== null}
-                icon={<LucideIcon icon="PlayCircle" />}
-              >
-                Start Transition
-              </Button>
-              <EditTransition
-                transition={state.transition}
-                onTransition={(update) =>
-                  mainStateUpdate((state) => ({ ...state, transition: update(state.transition) }))
-                }
-              />
-            </YStack>
-          </XStack>
-          {/* <YStack width="100%" aspectRatio={1} backgroundColor="red">
-        <WebView
-          style={{ flex: 1, backgroundColor: 'white', pointerEvents: 'none' }}
-          source={{ uri: 'http://localhost:3000/eg-live' }}
-        />
-      </YStack> */}
-        </YStack>
-        <Section title="Library">
-          <Button icon={<LucideIcon icon="Library" />} onPress={navigate('browse_videos')}>
-            Media
-          </Button>
-          <Button icon={<LucideIcon icon="Library" />} onPress={navigate('browse_library')}>
-            Scenes
-          </Button>
-        </Section>
-        <Section title="Setup">
-          <XStack>
-            <Button chromeless onPress={navigate(`global_effects`)} icon={<LucideIcon icon="Sparkles" />}>
-              Global Effects
-            </Button>
-            <Button chromeless icon={<LucideIcon icon="Wrench" />} onPress={navigate('admin')}>
-              Administration
-            </Button>
-          </XStack>
-        </Section>
-      </NarrowScrollView>
-    );
+    return <HomeScreen state={state} />;
   }),
   admin: () => (
     <NarrowScrollView>
@@ -604,54 +537,6 @@ export const models = {
   }),
 };
 
-function LibraryItemScreen({ item }: { item: string }) {
-  return (
-    <NarrowScrollView>
-      <StackScreen title={item} />
-      <YStack padding="$4" gap="$4">
-        <Button
-          onPress={async () => {
-            const itemValue = await getLibraryItem(item);
-            mainStateUpdate((state) => {
-              return {
-                ...state,
-                readyScene: itemValue.scene,
-                readyDashboard: itemValue.dashboard,
-                readySliderFields: itemValue.sliderFields,
-              };
-            });
-            return response(navigate('control/ready'));
-          }}
-          icon={<LucideIcon icon="PlayCircle" />}
-        >
-          Play on Ready
-        </Button>
-      </YStack>
-      <Section title="Rename Item">
-        <RiseForm
-          onSubmit={async (values) => {
-            await renameLibraryItem(item, values.label);
-            return response(goBack());
-          }}
-        >
-          <InputField id="label" label="Name" value={item} />
-          <SubmitButton>Rename</SubmitButton>
-        </RiseForm>
-      </Section>
-      <YStack padding="$4">
-        <Button
-          onPress={async () => {
-            await deleteLibraryItem(item);
-            return response(goBack());
-          }}
-        >
-          Delete from Library
-        </Button>
-      </YStack>
-    </NarrowScrollView>
-  );
-}
-
 function DraggableItem({ children }: { children?: JSXElement }) {
   return (
     <View
@@ -1021,31 +906,6 @@ function unpackControlPath(controlPath: string[]): { scenePath: string[]; restPa
   return { scenePath, restPath };
 }
 
-function AutoTransitionProgress({
-  transitionState,
-  transition,
-}: {
-  transitionState: TransitionState;
-  transition: Transition;
-}) {
-  const now = Date.now();
-  const { autoStartTime } = transitionState;
-  const { duration } = transition;
-  const timeRemaining = Math.max(0, autoStartTime ? duration - (now - autoStartTime) : 0);
-  const currentProgress = autoStartTime ? Math.min(1, (now - autoStartTime) / duration) : null;
-  return (
-    <YStack height={10} paddingHorizontal="$6">
-      <AnimatedProgress
-        duration={timeRemaining}
-        endProgress={autoStartTime ? 1 : 0}
-        startProgress={currentProgress}
-        size="small"
-        opacity={autoStartTime ? 1 : 0}
-      />
-    </YStack>
-  );
-}
-
 const SceneTypes = [
   { key: 'off', label: 'Off' },
   { key: 'color', label: 'Color' },
@@ -1299,15 +1159,6 @@ function SqeuenceItemControls({
   );
 }
 
-function Section({ title, children }: { title?: string; children?: JSXElement }) {
-  return (
-    <YStack gap="$4" padding="$4">
-      {title ? <Heading>{title}</Heading> : null}
-      {children}
-    </YStack>
-  );
-}
-
 function SequenceScreen({ scene, onScene, controlPath, extraControls }: SceneScreenProps<SequenceScene>) {
   const activeItemKey = scene.activeKey || scene.sequence[0]?.key;
   const nextItemKey = scene.nextActiveKey;
@@ -1397,61 +1248,6 @@ function SetTransitionButton({
         }
       />
     </BottomSheet>
-  );
-}
-
-function EditTransitionForm({
-  transition,
-  onTransition,
-}: {
-  transition: Transition;
-  onTransition: (updater: (t: Transition) => Transition) => void;
-}) {
-  function setMode(mode: Transition['mode']) {
-    onTransition((transition) => {
-      return { ...transition, mode };
-    });
-  }
-  return (
-    <>
-      <Label>Transition Mode</Label>
-      <Group orientation="horizontal" gap="$4">
-        <GroupItem>
-          <Button
-            onPress={() => {
-              setMode('mix');
-            }}
-            {...(transition.mode === 'mix' ? { backgroundColor: '$color7', icon: <LucideIcon icon="Check" /> } : {})}
-          >
-            Mix
-          </Button>
-        </GroupItem>
-        <GroupItem>
-          <Button
-            onPress={() => {
-              setMode('add');
-            }}
-            {...(transition.mode === 'add' ? { backgroundColor: '$color7', icon: <LucideIcon icon="Check" /> } : {})}
-          >
-            Add
-          </Button>
-        </GroupItem>
-      </Group>
-      <Label>Duration: {Math.floor((transition?.duration ?? DefaultTransitionDuration) / 100) / 10} sec</Label>
-      <SmoothSlider
-        value={transition?.duration ?? DefaultTransition.duration}
-        onValueChange={(v) =>
-          onTransition((t) => {
-            return { ...t, duration: v };
-          })
-        }
-        smoothing={0}
-        size={50}
-        min={0}
-        step={10}
-        max={15000}
-      />
-    </>
   );
 }
 
@@ -1817,26 +1613,6 @@ function SelectDropdown<Options extends Readonly<{ label: string; key: string }[
           ))}
         </YStack>
       </SheetScrollView>
-    </BottomSheet>
-  );
-}
-
-function EditTransition({
-  transition,
-  onTransition,
-}: {
-  transition: Transition;
-  onTransition: (update: (t: Transition) => Transition) => void;
-}) {
-  return (
-    <BottomSheet
-      trigger={
-        <BottomSheetTriggerButton chromeless icon={<LucideIcon icon="Presentation" />}>
-          Set Transition
-        </BottomSheetTriggerButton>
-      }
-    >
-      <EditTransitionForm transition={transition ?? DefaultTransition} onTransition={onTransition} />
     </BottomSheet>
   );
 }
