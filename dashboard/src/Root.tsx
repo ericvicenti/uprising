@@ -11,8 +11,11 @@ export const Root = () => {
   return (
     <TamaguiProvider config={config} defaultTheme="light">
       <FullscreenablePage>
-        <AutoSizeEGPreview label="Live" url={LiveURL} />
-        <AutoSizeEGPreview label="Ready" url={ReadyURL} />
+        <AutoSizeEGPreview
+          //label="Live"
+          url={LiveURL}
+        />
+        {/* <AutoSizeEGPreview label="Ready" url={ReadyURL} /> */}
       </FullscreenablePage>
     </TamaguiProvider>
   );
