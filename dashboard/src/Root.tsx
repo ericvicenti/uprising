@@ -1,6 +1,6 @@
 import '@tamagui/core/reset.css';
 
-import { TamaguiProvider } from 'tamagui';
+import { TamaguiProvider, YStack } from 'tamagui';
 
 import { AutoSizeEGPreview } from './EGPreview';
 import { FullscreenablePage } from './FullscreenablePage';
@@ -11,11 +11,9 @@ export const Root = () => {
   return (
     <TamaguiProvider config={config} defaultTheme="light">
       <FullscreenablePage>
-        <AutoSizeEGPreview
-          //label="Live"
-          url={LiveURL}
-        />
-        {/* <AutoSizeEGPreview label="Ready" url={ReadyURL} /> */}
+        <AutoSizeEGPreview url={LiveURL} />
+        {/* <AutoSizeEGPreview label="Live" url={LiveURL} />
+        <AutoSizeEGPreview label="Ready" url={ReadyURL} /> */}
       </FullscreenablePage>
     </TamaguiProvider>
   );
