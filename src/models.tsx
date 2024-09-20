@@ -1343,7 +1343,7 @@ function SequenceScreen({ scene, onScene, controlPath, extraControls }: SceneScr
             onPress={navigate(`reorder_sequence/${controlPath.join(':')}`)}
             icon={<LucideIcon icon="ArrowUpDown" />}
           >
-            Reorder Sequence
+            Reorder
           </Button>
         </XStack>
       </Section>

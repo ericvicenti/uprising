@@ -424,8 +424,13 @@ export function EffectsScreen({
       <StackScreen title={`Fx: ${getScreenTitle(scene, controlPath)}`} headerBackTitle={' '} />
       <Section title="Effect Order">
         {effects?.map((effect) => (
-          <Button onPress={navigate(`control/${controlPath.join(':')}:effect_${effect.key}`)} key={effect.key}>
-            {effect.type}
+          <Button
+            marginHorizontal="$4"
+            marginTop="$4"
+            onPress={navigate(`control/${controlPath.join(':')}:effect_${effect.key}`)}
+            key={effect.key}
+          >
+            {EffectTypes.find((e) => e.key === effect.type)?.label || effect.type}
           </Button>
         ))}
         {effects?.length === 0 ? (
