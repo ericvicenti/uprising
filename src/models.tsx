@@ -75,7 +75,7 @@ import { EffectScreen, EffectsScreen, GlobalEffectsScreen } from './ui/effects';
 import { NumericField, SwitchField } from './ui/fields';
 import { GradientFieldDropdown, GradientSlider } from './ui/gradient';
 import { HomeScreen } from './ui/home';
-import { LibraryItemScreen } from './ui/library';
+import { LibraryIndex, LibraryItemScreen } from './ui/library';
 import { EditTransitionForm } from './ui/transition';
 
 export const models = {
@@ -155,28 +155,13 @@ export const models = {
       return <BrowseMediaScreen media={media} importing={importing} />;
     })
   ),
-  browse_library: lookup((libraryId) =>
-    compareView((get) => {
-      if (libraryId !== '') return <LibraryItemScreen item={libraryId} />;
-      const lib = get(libraryIndex);
-      return (
-        <ScrollView>
-          <StackScreen title="Scene Library" />
-          <YStack padding="$4">
-            <ButtonGroup
-              items={
-                lib?.map((file) => ({
-                  key: file,
-                  label: file,
-                  onPress: navigate(`browse_library/${file}`),
-                })) || []
-              }
-            />
-          </YStack>
-        </ScrollView>
-      );
-    })
-  ),
+  browse_library: lookup((sceneKey) => {
+    if (sceneKey !== '') return <LibraryItemScreen item={sceneKey} />;
+    return compareView((get) => {
+      const library = get(libraryIndex);
+      return <LibraryIndex library={library} />;
+    });
+  }),
   reset_scene: lookup((scenePathStr) =>
     compareView((get) => {
       const scenePath = scenePathStr.split(':');
