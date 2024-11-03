@@ -15,7 +15,7 @@ import {
 import { createComponentDefinition } from '@rise-tools/react/jsx-runtime';
 import { Scene, SliderFields } from '../state-schema';
 import { navigate } from '@rise-tools/kit-react-navigation/server';
-import { SubmitButton } from '@rise-tools/kitchen-sink';
+import { SubmitButton } from '@rise-tools/kitchen-sink/server';
 import { writeLibraryItem } from '../library';
 import { ref, response } from '@rise-tools/react';
 import { MediaIndex } from '../media';
